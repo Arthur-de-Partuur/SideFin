@@ -2,7 +2,7 @@
 
 See your OrcaSlicer printer, filament and process presets as Orca really uses
 them, with the nozzle sizes side by side, and every setting that differs from
-the RatRig default marked.
+your printer maker's default (for example RatRig) marked.
 
 **Live app:** https://arthur-de-partuur.github.io/SideFin/ (development version: [/SideFin/dev/](https://arthur-de-partuur.github.io/SideFin/dev/))
 

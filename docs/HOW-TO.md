@@ -11,7 +11,7 @@
    - every setting with its label, tooltip, unit, level (Simple/Advanced), limits and built-in default (`PrintConfig.cpp`),
    - where Orca shows it: tab, page and group (`Tab.cpp`),
    - which settings each kind of preset stores (`Preset.cpp`),
-   - the RatRig and Orca filament library system profiles (`resources/profiles`).
+   - the system profiles of the printer makers listed in `VENDORS` in `build.ts` (RatRig for now) and the Orca filament library (`resources/profiles`). Adding a printer maker is one line there.
 
 ## Everyday commands
 

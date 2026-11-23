@@ -9,7 +9,7 @@ body:
       description: See docs/PURPOSE.md. If none fits, the idea may need a new goal first.
       options:
         - "G1 See every setting and its source"
-        - "G2 Deviations from the RatRig default"
+        - "G2 Deviations from the printer maker's default"
         - "G3 Compare nozzle sizes"
         - "G4 Edit and export"
         - "G5 Orca updates"

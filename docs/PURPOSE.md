@@ -2,7 +2,8 @@
 
 SideFin shows OrcaSlicer printer, filament and process presets as Orca really
 uses them, with the nozzle sizes side by side, and marks every setting that
-differs from the RatRig default.
+differs from the printer maker's default. It works for any printer Orca has
+system profiles for; RatRig is the first one it reads.
 
 ## Root cause
 
@@ -22,8 +23,8 @@ compare two presets.
 
 ## Goals
 
-- **G1** Every setting of every preset is visible with its value in effect and its source (yours, RatRig, Orca library, Orca built-in). (P1)
-- **G2** Every deviation from the RatRig default is marked, with the default next to it. (P2)
+- **G1** Every setting of every preset is visible with its value in effect and its source (yours, printer maker, Orca library, Orca built-in). (P1)
+- **G2** Every deviation from the printer maker's default is marked, with the default next to it. (P2)
 - **G3** The same preset can be compared across nozzle sizes in one view. (P3)
 - **G4** A setting can be changed in the app and exported as a valid Orca file. (P4)
 - **G5** After an Orca update the app shows which defaults changed and which presets that touches. (P5)
@@ -43,7 +44,7 @@ compare two presets.
 | Step | Version | What | Goals |
 |---|---|---|---|
 | 1 | 0.1 | Foundation: defaults builder, core resolver, tests, website | G1, G2 |
-| 2 | 0.2 | Viewer: three tabs, nozzle columns, RatRig default, source, levels, search | G1, G2, G3, G6 |
+| 2 | 0.2 | Viewer: three tabs, nozzle columns, printer maker's default, source, levels, search | G1, G2, G3, G6 |
 | 3 | 0.3 | Edit and export, value checks, backup, undo, CSV | G4 |
 | 4 | 0.4 | Manufacturer advice, calibration placeholders | G7 |
 | 5 | 0.5 | Orca update changes | G5 |

@@ -56,7 +56,7 @@ export function App() {
       <header>
         <Logo />
         <h1>SideFin</h1>
-        <span className="tag">See your OrcaSlicer profiles next to the RatRig defaults, per nozzle.</span>
+        <span className="tag">See your OrcaSlicer profiles next to your printer maker's defaults, per nozzle.</span>
       </header>
 
       <main>
@@ -94,7 +94,7 @@ export function App() {
               </li>
               <li>
                 System profiles: {count(baseline.profiles.printer)} printer, {count(baseline.profiles.filament)} filament,{' '}
-                {count(baseline.profiles.process)} process (RatRig and the Orca filament library).
+                {count(baseline.profiles.process)} process (printer makers SideFin reads so far: RatRig; plus the Orca filament library).
               </li>
               {baseline.report.unparsedDefaults.length > 0 && (
                 <li>Defaults SideFin could not read yet: {baseline.report.unparsedDefaults.join(', ')}.</li>

@@ -7,7 +7,7 @@
 //
 // It reads Orca's source at that tag: the setting definitions and built-in
 // defaults (PrintConfig.cpp), where each setting is shown (Tab.cpp), and the
-// RatRig and Orca filament library system profiles. It writes
+// system profiles of the printer makers in VENDORS and the Orca filament library. It writes
 // public/baseline/<version>.json and updates public/baseline/index.json.
 
 import { execFileSync } from 'node:child_process';
