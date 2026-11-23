@@ -1,0 +1,64 @@
+# Publishes main at /sidefin/ and dev at /sidefin/dev/ as one GitHub Pages site.
+# It runs after CI passes on either branch, so a broken build is never published.
+name: Publish website
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+      - run: npm ci && SIDEFIN_BASE=/sidefin/ npm run build
+        working-directory: main
+      - name: Build dev
+        id: dev
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: dev
+          path: dev
+      - if: steps.dev.outcome == 'success'
+        run: npm ci && SIDEFIN_BASE=/sidefin/dev/ npm run build
+        working-directory: dev
+      - name: Put both in one site
+        run: |
+          mkdir site
+          cp -r main/dist/. site/
+          if [ -d dev/dist ]; then mkdir site/dev && cp -r dev/dist/. site/dev/; fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

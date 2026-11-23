@@ -1,0 +1,49 @@
+# Every Monday: if OrcaSlicer has a new release, build its defaults and add
+# them to dev. Then publish the website, because pushes made by this job do
+# not start other workflows on their own.
+name: New Orca release
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Orca release tag to build, e.g. v2.5.2 (empty = newest)'
+        required: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build defaults
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then npm run baseline -- "${{ inputs.tag }}"; else npm run baseline -- --latest; fi
+      - run: npm test
+      - name: Commit to dev
+        id: commit
+        run: |
+          git add public/baseline
+          if git diff --cached --quiet; then echo "No new Orca release."; exit 0; fi
+          ver=$(node -p "require('./public/baseline/index.json').versions[0].orcaVersion")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Add Orca defaults for a new release (latest: $ver)"
+          git push origin dev
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+      - if: steps.commit.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref dev && gh workflow run pages.yml --ref main
