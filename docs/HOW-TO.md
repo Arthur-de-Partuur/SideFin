@@ -17,7 +17,7 @@
 
 ```sh
 npm install          # once
-npm run dev          # open the app at http://localhost:5173/sidefin/
+npm run dev          # open the app at http://localhost:5173/SideFin/
 npm test             # run all tests
 npm run build        # type check and build into dist/
 npm run baseline -- v2.5.2     # build the defaults for one Orca release
@@ -26,8 +26,8 @@ npm run baseline -- --latest   # build the newest Orca release if it is missing
 
 ## Branches and versions
 
-1. `dev` is where work happens. Every push to `dev` is published at `/sidefin/dev/`.
-2. `main` is the live app at `/sidefin/`. Changes reach `main` through a pull request from `dev`.
+1. `dev` is where work happens. Every push to `dev` is published at `/SideFin/dev/`.
+2. `main` is the live app at `/SideFin/`. Changes reach `main` through a pull request from `dev`.
 3. Versions follow `MAJOR.MINOR.PATCH`; work in progress is `-dev.N`. Bump `package.json` and add a line to `CHANGELOG.md` with the goal ids.
 4. An open page checks `version.json` every hour and offers a reload when a newer version is online.
 

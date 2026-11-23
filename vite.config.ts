@@ -15,9 +15,9 @@ function versionFile(): Plugin {
   };
 }
 
-// GitHub Pages serves the app from /sidefin/ (main) and /sidefin/dev/ (dev).
+// GitHub Pages serves the app from /SideFin/ (main) and /SideFin/dev/ (dev).
 export default defineConfig({
-  base: process.env.SIDEFIN_BASE ?? '/sidefin/',
+  base: process.env.SIDEFIN_BASE ?? '/SideFin/',
   plugins: [react(), versionFile()],
   define: {
     __APP_VERSION__: JSON.stringify(version),

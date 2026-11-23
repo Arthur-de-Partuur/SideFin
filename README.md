@@ -4,7 +4,7 @@ See your OrcaSlicer printer, filament and process presets as Orca really uses
 them, with the nozzle sizes side by side, and every setting that differs from
 the RatRig default marked.
 
-**Live app:** https://arthur-de-partuur.github.io/sidefin/ (development version: [/sidefin/dev/](https://arthur-de-partuur.github.io/sidefin/dev/))
+**Live app:** https://arthur-de-partuur.github.io/SideFin/ (development version: [/SideFin/dev/](https://arthur-de-partuur.github.io/SideFin/dev/))
 
 Your profiles stay on your computer. The app reads them in your browser and never uploads them.
 

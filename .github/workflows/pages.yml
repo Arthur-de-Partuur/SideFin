@@ -1,4 +1,4 @@
-# Publishes main at /sidefin/ and dev at /sidefin/dev/ as one GitHub Pages site.
+# Publishes main at /SideFin/ and dev at /SideFin/dev/ as one GitHub Pages site.
 # It runs after CI passes on either branch, so a broken build is never published.
 name: Publish website
 
@@ -31,7 +31,7 @@ jobs:
         with:
           ref: main
           path: main
-      - run: npm ci && SIDEFIN_BASE=/sidefin/ npm run build
+      - run: npm ci && SIDEFIN_BASE=/SideFin/ npm run build
         working-directory: main
       - name: Build dev
         id: dev
@@ -41,7 +41,7 @@ jobs:
           ref: dev
           path: dev
       - if: steps.dev.outcome == 'success'
-        run: npm ci && SIDEFIN_BASE=/sidefin/dev/ npm run build
+        run: npm ci && SIDEFIN_BASE=/SideFin/dev/ npm run build
         working-directory: dev
       - name: Put both in one site
         run: |

@@ -4,7 +4,7 @@ import { isNewer, onlineVersion } from '../core/update';
 import { Logo } from './Logo';
 
 const BASE = import.meta.env.BASE_URL;
-const REPO = 'https://github.com/Arthur-de-Partuur/sidefin';
+const REPO = 'https://github.com/Arthur-de-Partuur/SideFin';
 const HOUR = 60 * 60 * 1000;
 
 export function App() {
