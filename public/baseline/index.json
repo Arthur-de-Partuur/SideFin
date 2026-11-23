@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "versions": [
+    {
+      "orcaVersion": "2.5.2",
+      "file": "2.5.2.json",
+      "generatedAt": "2026-11-23T23:06:20.218Z"
+    },
+    {
+      "orcaVersion": "2.4.2",
+      "file": "2.4.2.json",
+      "generatedAt": "2026-11-23T23:06:19.513Z"
+    }
+  ]
+}

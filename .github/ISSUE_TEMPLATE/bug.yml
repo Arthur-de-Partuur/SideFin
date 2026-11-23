@@ -1,0 +1,36 @@
+name: Bug
+description: Something in SideFin does not work as expected.
+labels: [bug]
+body:
+  - type: dropdown
+    id: goal
+    attributes:
+      label: Which goal?
+      description: See docs/PURPOSE.md.
+      options:
+        - "G1 See every setting and its source"
+        - "G2 Deviations from the printer maker's default"
+        - "G3 Compare nozzle sizes"
+        - "G4 Edit and export"
+        - "G5 Orca updates"
+        - "G6 Profiles stay on my computer"
+        - "G7 Calibration log"
+        - "G8 Use a calibration result"
+        - "Not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to see it
+      placeholder: "1. Open the Filament tab\n2. ..."
+  - type: input
+    id: version
+    attributes:
+      label: SideFin version (bottom of the page) and Orca version

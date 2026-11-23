@@ -1,0 +1,27 @@
+name: Idea
+description: Suggest a change or a new feature.
+labels: [idea]
+body:
+  - type: dropdown
+    id: goal
+    attributes:
+      label: Which goal?
+      description: See docs/PURPOSE.md. If none fits, the idea may need a new goal first.
+      options:
+        - "G1 See every setting and its source"
+        - "G2 Deviations from the printer maker's default"
+        - "G3 Compare nozzle sizes"
+        - "G4 Edit and export"
+        - "G5 Orca updates"
+        - "G6 Profiles stay on my computer"
+        - "G7 Calibration log"
+        - "G8 Use a calibration result"
+        - "None of these"
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like, and why?
+    validations:
+      required: true
