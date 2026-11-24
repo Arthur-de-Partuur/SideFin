@@ -15,6 +15,8 @@ export interface EditTarget {
   edited: boolean;
   /** The preset stores one value per extruder type; only the printer's one is changed. */
   perVariant: boolean;
+  /** Other presets in view that the change can also be applied to (the By type view). */
+  others: number;
   /** Why a value would look odd, by SideFin's warning rules. */
   warn: (value: OrcaValue) => string | undefined;
 }
@@ -29,7 +31,7 @@ export function Editor({
   onClose,
 }: {
   target: EditTarget;
-  onSave: (items: string[]) => void;
+  onSave: (items: string[], all: boolean) => void;
   onClear: () => void;
   onClose: () => void;
 }) {
@@ -38,6 +40,7 @@ export function Editor({
   const same = items.every((x) => x === items[0]);
   const [inputs, setInputs] = useState<string[]>(same ? [items[0]] : items);
   const [error, setError] = useState<{ error: string; index: number }>();
+  const [forAll, setForAll] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -56,7 +59,7 @@ export function Editor({
       return;
     }
     // One field for a list whose items were all the same: keep the list length.
-    onSave(inputs.length === 1 && items.length > 1 ? items.map(() => r.items[0]) : r.items);
+    onSave(inputs.length === 1 && items.length > 1 ? items.map(() => r.items[0]) : r.items, forAll);
   };
 
   const field = (value: string, i: number) => {
@@ -112,6 +115,12 @@ export function Editor({
         ))}
       </div>
       {inputs.length === 1 && items.length > 1 && <p className="muted small">Used for all {items.length} values of this setting, as before.</p>}
+      {target.others > 0 && (
+        <label className="check small">
+          <input type="checkbox" checked={forAll} onChange={(e) => setForAll(e.target.checked)} />
+          Also set this for the other {target.others} {target.others === 1 ? 'filament' : 'filaments'} shown
+        </label>
+      )}
       {error && <p className="error small">{error.error}</p>}
       {!error && warning && <p className="warntext small">Warning: {warning}</p>}
       <dl className="small">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { baseline } from './fixtures/baseline';
 import type { PresetFile } from './presets';
-import { buildRows, columnsFor, countDiffers, families, filterRows, printerFamilies, showValue } from './table';
+import { buildRows, columnsFor, countDiffers, families, filterRows, printerFamilies, showValue, typeFamilies } from './table';
 
 const file = (kind: PresetFile['kind'], json: PresetFile['json']): PresetFile => ({ kind, path: `${kind}/${json.name}.json`, json });
 
@@ -62,5 +62,27 @@ describe('defaultLabel', () => {
     const fam = families(presets, 'process', me)[0];
     expect(defaultLabel(columnsFor(baseline, fam, presets, me).dflt)).toBe('Acme default');
     expect(defaultLabel(undefined)).toBe('Default');
+  });
+});
+
+describe('filaments by type', () => {
+  const fil = (name: string, more: Record<string, unknown> = {}) => file('filament', { name, inherits: 'Generic PETG @System', ...more });
+  const list = [
+    ...presets,
+    fil('PETG A 0.40 @Me'),
+    fil('PETG A 0.60 @Me'),
+    fil('PETG B @Me'),
+    fil('PLA C 0.40 @Me', { filament_type: ['PLA'] }),
+  ];
+  it('groups the filaments for one nozzle by filament type, one column per filament', () => {
+    const [me] = printerFamilies(baseline, list);
+    const groups = typeFamilies(baseline, list, me, '0.4');
+    expect(groups.map((g) => g.name)).toEqual(['PETG', 'PLA']);
+    expect(groups[0].members.map((m) => [m.label, m.file.json.name])).toEqual([
+      ['PETG A @Me', 'PETG A 0.40 @Me'],
+      ['PETG B @Me', 'PETG B @Me'],
+    ]);
+    const { columns } = columnsFor(baseline, groups[0], list, me);
+    expect(columns.map((c) => c.label)).toEqual(['PETG A @Me', 'PETG B @Me']);
   });
 });

@@ -20,7 +20,7 @@ export interface PrinterFamily {
 export interface Family {
   kind: PresetKind;
   name: string;
-  members: { nozzle?: string; file: PresetFile }[];
+  members: { nozzle?: string; file: PresetFile; label?: string }[];
 }
 
 export interface Column {
@@ -143,7 +143,7 @@ export function columnsFor(
     const list = full.values[VARIANT_LIST[family.kind]]?.value;
     const index = v && Array.isArray(list) ? list.indexOf(v) : -1;
     return {
-      label: nozzleLabel(m.nozzle),
+      label: m.label ?? nozzleLabel(m.nozzle),
       nozzle: m.nozzle,
       name: m.file.json.name,
       resolved: withVariant(full, m.nozzle),
@@ -291,4 +291,23 @@ export function sliceOf(col: Column, key: string): { full: OrcaValue | undefined
 /** Number of settings with a warning in at least one nozzle. */
 export function countWarnings(rows: Row[]): number {
   return rows.filter((r) => r.cells.some((c) => c.warning)).length;
+}
+
+/**
+ * Filament presets grouped by filament type (PLA, PETG, ...) for one nozzle:
+ * one column per filament. Presets that fit any nozzle are included.
+ */
+export function typeFamilies(baseline: Baseline, presets: PresetFile[], printers: PrinterFamily | undefined, nozzle: string | undefined): Family[] {
+  const users = userMap(presets, 'filament');
+  const map = new Map<string, Family['members']>();
+  for (const f of families(presets, 'filament', printers)) {
+    const m = f.members.find((x) => x.nozzle === nozzle) ?? f.members.find((x) => x.nozzle === undefined);
+    if (!m) continue;
+    const t = resolvePreset(baseline, 'filament', m.file.json, users).values.filament_type?.value;
+    const type = (Array.isArray(t) ? t[0] : t) || 'Unknown type';
+    map.set(type, [...(map.get(type) ?? []), { ...m, label: f.name }]);
+  }
+  return [...map.entries()]
+    .map(([name, members]) => ({ kind: 'filament' as const, name, members: members.sort((a, b) => a.label!.localeCompare(b.label!)) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

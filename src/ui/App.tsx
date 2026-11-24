@@ -143,11 +143,15 @@ export function App() {
     () => Object.fromEntries((loaded?.presets ?? []).filter((p) => edits[p.path]).map((p) => [p.path, changedKeys(p.json, edits[p.path])])),
     [loaded, edits],
   );
-  const update = (file: PresetFile, json: ProfileJson) => {
+  /** Apply changes to one or more presets as one step, so one Undo takes them all back. */
+  const update = (changes: { file: PresetFile; json: ProfileJson }[]) => {
     setHistory([...history, edits]);
-    const original = loaded?.presets.find((p) => p.path === file.path)?.json;
-    const next = { ...edits, [file.path]: json };
-    if (original && changedKeys(original, json).length === 0) delete next[file.path];
+    const next = { ...edits };
+    for (const { file, json } of changes) {
+      const original = loaded?.presets.find((p) => p.path === file.path)?.json;
+      next[file.path] = json;
+      if (original && changedKeys(original, json).length === 0) delete next[file.path];
+    }
     keepEdits(next);
   };
   const undo = () => {

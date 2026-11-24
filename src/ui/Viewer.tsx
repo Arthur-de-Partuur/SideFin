@@ -10,6 +10,7 @@ import {
   columnsFor,
   countDiffers,
   countWarnings,
+  typeFamilies,
   defaultLabel,
     families,
   filterRows,
@@ -121,7 +122,7 @@ export function Viewer({
   printers?: PrinterFamily;
   /** Settings changed in SideFin and not exported yet, per preset path. */
   changed: Record<string, string[]>;
-  onUpdate: (file: PresetFile, json: ProfileJson) => void;
+  onUpdate: (changes: { file: PresetFile; json: ProfileJson }[]) => void;
 }) {
   const [editing, setEditing] = useState<EditTarget>();
   const allNozzles = useMemo(() => (printers?.printers.map((p) => p.nozzle).filter((n): n is string => !!n) ?? []), [printers]);
@@ -140,33 +141,42 @@ export function Viewer({
     setOpened(next);
   };
   const [kind, setKind] = useState<PresetKind>('filament');
-  const [picked, setPicked] = useState<Partial<Record<PresetKind, string>>>({});
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [byType, setByType] = useState(store.get('byType') === '1');
+  const [typeNozzle, setTypeNozzle] = useState<string | undefined>(store.get('typeNozzle'));
+  const typeMode = kind === 'filament' && byType;
+  const tNozzle = typeNozzle && allNozzles.includes(typeNozzle) ? typeNozzle : (allNozzles.find((n) => Number(n) === 0.4) ?? allNozzles[0]);
+  const pickKey = typeMode ? `type:${tNozzle}` : kind;
   const [level, setLevel] = useState<Level>('advanced');
   const [onlyDiffers, setOnlyDiffers] = useState(true);
   const [onlyNozzles, setOnlyNozzles] = useState(false);
   const [onlyWarnings, setOnlyWarnings] = useState(false);
   const [search, setSearch] = useState('');
 
-  const fams = useMemo(() => families(presets, kind, printers), [presets, kind, printers]);
+  const fams = useMemo(
+    () => (typeMode ? typeFamilies(baseline, presets, printers, tNozzle) : families(presets, kind, printers)),
+    [typeMode, baseline, presets, kind, printers, tNozzle],
+  );
+  const visible = (c: { nozzle?: string }) => typeMode || c.nozzle === undefined || !hidden.includes(c.nozzle);
   const counts = useMemo(
     () =>
       Object.fromEntries(
         fams.map((f) => {
           const { columns, dflt } = columnsFor(baseline, f, presets, printers);
-          const shown = columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
+          const shown = columns.filter(visible);
           const r = filterRows(buildRows(baseline, kind, shown, dflt), { level });
           return [f.name, { differs: countDiffers(r), warnings: countWarnings(r) }];
         }),
       ),
-    [fams, baseline, presets, printers, kind, level, hidden],
+    [fams, baseline, presets, printers, kind, level, hidden, typeMode],
   );
-  const family = fams.find((f) => f.name === picked[kind]) ?? fams[0];
+  const family = fams.find((f) => f.name === picked[pickKey]) ?? fams[0];
   const view = useMemo(() => {
     if (!family) return undefined;
     const all = columnsFor(baseline, family, presets, printers);
-    const columns = all.columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
+    const columns = all.columns.filter(visible);
     return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt) };
-  }, [family, baseline, presets, printers, kind, hidden]);
+  }, [family, baseline, presets, printers, kind, hidden, typeMode]);
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
   const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
 
@@ -194,16 +204,23 @@ export function Viewer({
     download(`${family.name}.csv`, csv(table), 'text/csv');
   };
 
-  const saveEdit = (items: string[]) => {
-    if (!editing?.column.file) return;
-    const { column, key, def, cell } = editing;
-    const shown = cell.value ?? (def && /s$|Groups$/.test(def.type) ? [] : undefined);
-    onUpdate(column.file!, setValue(column.file!.json, key, items, shown, sliceOf(column, key)));
+  const saveEdit = (items: string[], all: boolean) => {
+    if (!editing?.column.file || !view) return;
+    const { column, key, def } = editing;
+    const targets = all ? view.columns.filter((c) => c.file) : [column];
+    onUpdate(
+      targets.map((c) => {
+        const shown = c.resolved.values[key]?.value ?? def?.default ?? (def && /s$|Groups$/.test(def.type) ? [] : undefined);
+        // Lists keep their own length per preset (one value per extruder).
+        const own = Array.isArray(shown) && shown.length !== items.length && items.every((x) => x === items[0]) ? shown.map(() => items[0]) : items;
+        return { file: c.file!, json: setValue(c.file!.json, key, own, shown, sliceOf(c, key)) };
+      }),
+    );
     setEditing(undefined);
   };
   const clearEdit = () => {
     if (!editing?.column.file) return;
-    onUpdate(editing.column.file, clearValue(editing.column.file.json, editing.key));
+    onUpdate([{ file: editing.column.file, json: clearValue(editing.column.file.json, editing.key) }]);
     setEditing(undefined);
   };
 
@@ -226,7 +243,29 @@ export function Viewer({
           ))}
         </div>
         <input className="search" type="search" placeholder="Search settings" value={search} onChange={(e) => setSearch(e.target.value)} />
-        {allNozzles.length > 1 && (
+        {kind === 'filament' && (
+          <div className="seg" role="group" aria-label="Group filaments">
+            <button className={byType ? '' : 'on'} title="One preset at a time, its nozzles side by side" onClick={() => (setByType(false), store.set('byType', '0'))}>
+              By nozzle
+            </button>
+            <button className={byType ? 'on' : ''} title="All filaments of one type side by side, for one nozzle" onClick={() => (setByType(true), store.set('byType', '1'))}>
+              By type
+            </button>
+          </div>
+        )}
+        {typeMode && allNozzles.length > 1 && (
+          <label className="pick">
+            Nozzle{' '}
+            <select value={tNozzle} onChange={(e) => (setTypeNozzle(e.target.value), store.set('typeNozzle', e.target.value))}>
+              {allNozzles.map((n) => (
+                <option key={n} value={n}>
+                  {Number(n).toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!typeMode && allNozzles.length > 1 && (
           <div className="nozzles" role="group" aria-label="Nozzles shown">
             <span className="lbl">Nozzles</span>
             {allNozzles.map((n) => (
@@ -246,7 +285,7 @@ export function Viewer({
           </div>
           {fams.length === 0 && <p className="muted small">None found for this printer.</p>}
           {fams.map((f) => (
-            <button key={f.name} className={`fam${f === family ? ' on' : ''}`} onClick={() => setPicked({ ...picked, [kind]: f.name })}>
+            <button key={f.name} className={`fam${f === family ? ' on' : ''}`} onClick={() => setPicked({ ...picked, [pickKey]: f.name })}>
               <span>{f.name}</span>
               <span className="cnts">
                 {counts[f.name]?.warnings > 0 && (
@@ -271,7 +310,7 @@ export function Viewer({
                   <span className="muted small">
                     compared with <b>{view.dflt.name}</b>
                     {view.columns.length === 0 && ' · none of the chosen nozzles has this preset'}
-                    {view.parents.length > 1 && ` (the nozzles inherit from different presets: ${view.parents.join(', ')})`}
+                    {view.parents.length > 1 && ` (the ${typeMode ? "filaments" : "nozzles"} inherit from different presets: ${view.parents.join(', ')})`}
                   </span>
                 )}
                 <div className="chips">
@@ -280,7 +319,7 @@ export function Viewer({
                   </button>
                   {view.columns.length > 1 && (
                     <button className={`chip${onlyNozzles ? ' on' : ''}`} onClick={() => setOnlyNozzles(!onlyNozzles)}>
-                      Only where nozzles differ
+                      {typeMode ? 'Only where filaments differ' : 'Only where nozzles differ'}
                     </button>
                   )}
                   {(warnCount > 0 || onlyWarnings) && (
@@ -364,7 +403,7 @@ export function Viewer({
                                   edited={edited}
                                   onEdit={
                                     col.file && !r.def?.readonly
-                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }) })
+                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), others: typeMode ? view.columns.filter((x) => x.file && x !== col).length : 0, warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }) })
                                       : undefined
                                   }
                                 />

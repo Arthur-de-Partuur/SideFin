@@ -12,6 +12,7 @@ Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 - Backup: download all your presets, exactly as read, as a zip. (G6)
 - Download the table as CSV. (G1)
 - Warnings (!) for values that look odd: a number more than 50% from the printer maker's default, a line width under 60% or over 200% of the nozzle, a nozzle temperature outside the filament's range. Filter "Only warnings"; the editor warns while you type. (G4, feedback point 7)
+- Filament tab "By type": all filaments of one type (PLA, PETG, ...) side by side for one nozzle, with "Also set this for the other filaments shown" in the editor. One Undo takes such a change back. (G3, G4, feedback point 9)
 
 ## 0.2.0 (2026-11-24)
 
