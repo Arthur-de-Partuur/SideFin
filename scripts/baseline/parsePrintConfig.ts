@@ -133,7 +133,8 @@ export function readDefault(
     case 'ConfigOptionString':
       return a.length <= 1 ? str(inner) : str(inner);
     case 'ConfigOptionPoint':
-      return a.length === 1 ? point(a[0]) : undefined;
+      // One point is written "x,y"; in a list of points each is "XxY" (Config.hpp serialize).
+      return a.length === 1 ? point(a[0])?.replace('x', ',') : undefined;
     case 'ConfigOptionEnum': {
       if (!enumType || a.length !== 1) return undefined;
       const ident = a[0].replace(/^.*::/, '');
