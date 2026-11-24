@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PresetFile } from '../core/presets';
 import {
   buildRows,
@@ -255,9 +255,7 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                               {r.nozzlesDiffer && view.columns.length > 1 && <i className="nzdot" title="The nozzles differ" />}
                               <div className="k">{r.key}</div>
                               {[...r.cells.map((c) => c.value), r.dflt?.value].some((v) => showValue(r.def, v).long) && (
-                                <button className="more" onClick={() => toggleRow(r.key)}>
-                                  {opened.has(r.key) ? 'Show less' : 'Show all'}
-                                </button>
+                                <MoreButton open={opened.has(r.key)} onToggle={() => toggleRow(r.key)} />
                               )}
                             </td>
                             {r.cells.map((c, i) => (
@@ -296,5 +294,28 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
         </main>
       </div>
     </div>
+  );
+}
+
+/**
+ * "Show all" for a row with long text. It hides itself when every text in the
+ * row already fits in the clamped cell, so it only shows when there is more.
+ */
+function MoreButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [needed, setNeeded] = useState(true);
+  useLayoutEffect(() => {
+    const row = ref.current?.closest('tr');
+    if (!row || open) return;
+    const check = () => setNeeded([...row.querySelectorAll('.clamp')].some((el) => el.scrollHeight > el.clientHeight + 1));
+    check();
+    const watch = new ResizeObserver(check);
+    watch.observe(row);
+    return () => watch.disconnect();
+  }, [open]);
+  return (
+    <button ref={ref} className="more" onClick={onToggle} style={open || needed ? undefined : { visibility: 'hidden', height: 0, padding: 0 }} tabIndex={open || needed ? 0 : -1}>
+      {open ? 'Show less' : 'Show all'}
+    </button>
   );
 }

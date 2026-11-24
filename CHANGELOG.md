@@ -12,6 +12,7 @@ Feedback round 1 (0.2.0-dev.2):
 - The default column is named after its source ("RatRig default", "Orca library default"); Orca's built-in values are grey italic. (point 6)
 - An (i) next to each setting shows Orca's explanation; settings such as "Fan speed-up time" now have their name. (point 5)
 - With one printer, its name is shown as text instead of a one-item list.
+- "Show all" only appears when a text is cut off. (0.2.0-dev.3, point 4)
 
 - Viewer: choose your Orca data folder and see your printer, filament and process presets side by side per nozzle, next to the printer maker's default. Nothing is uploaded; Chrome and Edge remember the folder. (G1, G2, G3, G6)
 - Values that differ from the default are marked, as are settings where the nozzles differ. Bold values are set in the preset itself; hover a value to see where it comes from. (G1, G2, G3)
