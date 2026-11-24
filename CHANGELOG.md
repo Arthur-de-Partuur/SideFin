@@ -4,6 +4,15 @@ Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
 ## 0.2.0 (in progress)
 
+Feedback round 1 (0.2.0-dev.2):
+
+- The viewer uses the whole window; the table scrolls inside it and the footer stays visible. (points 1, 2)
+- Choose which nozzles to show (0.25, 0.40, 0.60); the choice is remembered. (point 3, G3)
+- Number columns stay narrow; G-code and notes are shown in full, wrapped, up to 8 lines, with "Show all". (point 4)
+- The default column is named after its source ("RatRig default", "Orca library default"); Orca's built-in values are grey italic. (point 6)
+- An (i) next to each setting shows Orca's explanation; settings such as "Fan speed-up time" now have their name. (point 5)
+- With one printer, its name is shown as text instead of a one-item list.
+
 - Viewer: choose your Orca data folder and see your printer, filament and process presets side by side per nozzle, next to the printer maker's default. Nothing is uploaded; Chrome and Edge remember the folder. (G1, G2, G3, G6)
 - Values that differ from the default are marked, as are settings where the nozzles differ. Bold values are set in the preset itself; hover a value to see where it comes from. (G1, G2, G3)
 - Simple, Advanced and All levels as in Orca, filters "only where I differ" and "only where nozzles differ", and search by name or key. (G1)

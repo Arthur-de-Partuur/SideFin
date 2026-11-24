@@ -128,7 +128,12 @@ export function App() {
           <Logo />
           <span>SideFin</span>
         </div>
-        {loaded && printers.length > 0 && (
+        {loaded && printers.length === 1 && printer && (
+          <span className="pick">
+            Printer <b className="plain">{printer.name}</b> ({printer.printers.map((x) => x.nozzle ?? '?').join(', ')})
+          </span>
+        )}
+        {loaded && printers.length > 1 && (
           <label className="pick">
             Printer{' '}
             <select

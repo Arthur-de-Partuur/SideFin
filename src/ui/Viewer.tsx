@@ -4,7 +4,8 @@ import {
   buildRows,
   columnsFor,
   countDiffers,
-  families,
+  defaultLabel,
+    families,
   filterRows,
   showValue,
   type Cell,
@@ -42,19 +43,52 @@ function sourceText(c: Cell): string {
   return `From ${c.origin === 'system' ? 'system preset' : 'your preset'} "${c.from}"`;
 }
 
-function ValueCell({ row, cell }: { row: Row; cell: Cell }) {
+const store = {
+  get: (k: string) => {
+    try {
+      return localStorage.getItem(`sidefin.${k}`) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  },
+  set: (k: string, v: string) => {
+    try {
+      localStorage.setItem(`sidefin.${k}`, v);
+    } catch {
+      /* not remembered */
+    }
+  },
+};
+
+/** One value. Long text (G-code, notes) is shown in full, wrapped, up to a few lines unless the row is opened. */
+function ValueCell({ row, cell, open, extra = '', note }: { row: Row; cell: Pick<Cell, 'value'> & Partial<Cell>; open: boolean; extra?: string; note?: string }) {
   const v = showValue(row.def, cell.value);
-  const cls = ['v', cell.differs ? 'dev' : '', cell.own ? 'own' : cell.origin === 'default' ? 'builtin' : ''].join(' ');
-  const title = [v.full, sourceText(cell), v.unknownChoice ? 'Old value: Orca converts or ignores it.' : ''].filter(Boolean).join('\n');
+  const cls = ['v', v.long ? 'txt' : '', cell.differs ? 'dev' : '', cell.own ? 'own' : cell.origin === 'default' ? 'builtin' : '', extra].join(' ');
+  const title = [cell.origin ? sourceText(cell as Cell) : note, v.unknownChoice ? 'Old value: Orca converts or ignores it.' : ''].filter(Boolean).join('\n');
   return (
     <td className={cls} title={title}>
-      {v.text}
+      {v.long ? <div className={open ? 'full' : 'clamp'}>{v.full}</div> : v.text}
       {v.unknownChoice && <span className="old">old</span>}
     </td>
   );
 }
 
 export function Viewer({ baseline, presets, printers }: { baseline: Baseline; presets: PresetFile[]; printers?: PrinterFamily }) {
+  const allNozzles = useMemo(() => (printers?.printers.map((p) => p.nozzle).filter((n): n is string => !!n) ?? []), [printers]);
+  const [hidden, setHidden] = useState<string[]>(() => (store.get('hiddenNozzles') ?? '').split(',').filter(Boolean));
+  const toggleNozzle = (n: string) => {
+    const next = hidden.includes(n) ? hidden.filter((x) => x !== n) : [...hidden, n];
+    if (allNozzles.every((x) => next.includes(x))) return; // keep at least one
+    setHidden(next);
+    store.set('hiddenNozzles', next.join(','));
+  };
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const toggleRow = (key: string) => {
+    const next = new Set(opened);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setOpened(next);
+  };
   const [kind, setKind] = useState<PresetKind>('filament');
   const [picked, setPicked] = useState<Partial<Record<PresetKind, string>>>({});
   const [level, setLevel] = useState<Level>('advanced');
@@ -68,17 +102,19 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
       Object.fromEntries(
         fams.map((f) => {
           const { columns, dflt } = columnsFor(baseline, f, presets, printers);
-          return [f.name, countDiffers(filterRows(buildRows(baseline, kind, columns, dflt), { level }))];
+          const shown = columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
+          return [f.name, countDiffers(filterRows(buildRows(baseline, kind, shown, dflt), { level }))];
         }),
       ),
-    [fams, baseline, presets, printers, kind, level],
+    [fams, baseline, presets, printers, kind, level, hidden],
   );
   const family = fams.find((f) => f.name === picked[kind]) ?? fams[0];
   const view = useMemo(() => {
     if (!family) return undefined;
-    const { columns, dflt, parents } = columnsFor(baseline, family, presets, printers);
-    return { columns, dflt, parents, rows: buildRows(baseline, kind, columns, dflt) };
-  }, [family, baseline, presets, printers, kind]);
+    const all = columnsFor(baseline, family, presets, printers);
+    const columns = all.columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
+    return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt) };
+  }, [family, baseline, presets, printers, kind, hidden]);
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, search }) : [];
 
   // Orca repeats short labels such as "First layer" within a group; use the full label there.
@@ -111,6 +147,17 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
           ))}
         </div>
         <input className="search" type="search" placeholder="Search settings" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {allNozzles.length > 1 && (
+          <div className="nozzles" role="group" aria-label="Nozzles shown">
+            <span className="lbl">Nozzles</span>
+            {allNozzles.map((n) => (
+              <label key={n} className={`nz-pick${hidden.includes(n) ? '' : ' on'}`}>
+                <input type="checkbox" checked={!hidden.includes(n)} onChange={() => toggleNozzle(n)} />
+                {Number(n).toFixed(2)}
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="body">
@@ -137,6 +184,7 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                 {view.dflt && (
                   <span className="muted small">
                     compared with <b>{view.dflt.name}</b>
+                    {view.columns.length === 0 && ' · none of the chosen nozzles has this preset'}
                     {view.parents.length > 1 && ` (the nozzles inherit from different presets: ${view.parents.join(', ')})`}
                   </span>
                 )}
@@ -173,7 +221,7 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                           {c.label}
                         </th>
                       ))}
-                      <th title={view.dflt?.name}>Default</th>
+                      <th title={view.dflt?.name}>{defaultLabel(view.dflt)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -196,18 +244,32 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                             </tr>
                           )}
                           <tr>
-                            <td className="name" title={r.def?.tooltip}>
+                            <td className="name">
                               {labelOf(r)}
                               {r.def?.unit && <span className="unit"> {r.def.unit}</span>}
+                              {r.def?.tooltip && (
+                                <span className="tip" tabIndex={0} aria-label="What this setting does">
+                                  i<span className="tipbox" role="tooltip">{r.def.tooltip}</span>
+                                </span>
+                              )}
                               {r.nozzlesDiffer && view.columns.length > 1 && <i className="nzdot" title="The nozzles differ" />}
                               <div className="k">{r.key}</div>
+                              {[...r.cells.map((c) => c.value), r.dflt?.value].some((v) => showValue(r.def, v).long) && (
+                                <button className="more" onClick={() => toggleRow(r.key)}>
+                                  {opened.has(r.key) ? 'Show less' : 'Show all'}
+                                </button>
+                              )}
                             </td>
                             {r.cells.map((c, i) => (
-                              <ValueCell key={i} row={r} cell={c} />
+                              <ValueCell key={i} row={r} cell={c} open={opened.has(r.key)} />
                             ))}
-                            <td className="v dflt" title={showValue(r.def, r.dflt?.value).full}>
-                              {showValue(r.def, r.dflt?.value).text}
-                            </td>
+                            <ValueCell
+                              row={r}
+                              cell={{ value: r.dflt?.value }}
+                              open={opened.has(r.key)}
+                              extra={`dflt${r.dflt?.origin === 'default' ? ' builtin-d' : ''}`}
+                              note={r.dflt?.origin === 'default' ? "Orca's built-in default: no RatRig or Orca profile sets this" : r.dflt ? `From "${r.dflt.from}"` : undefined}
+                            />
                           </tr>
                         </Fragment>
                       );
@@ -225,9 +287,9 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                   Nozzles differ
                 </span>
                 <span>
-                  <b>Bold</b>: set in this preset · normal: inherited · <span className="muted">grey</span>: Orca's built-in default
+                  <b>Bold</b>: set in this preset · normal: inherited · <i className="muted">grey italic</i>: Orca's built-in default
                 </span>
-                <span>Hover a value to see where it comes from.</span>
+                <span>Hover a value to see where it comes from, or the i to see what a setting does.</span>
               </div>
             </>
           )}

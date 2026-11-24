@@ -54,3 +54,13 @@ describe('showValue', () => {
     expect(showValue(undefined, 'G90\nG21')).toMatchObject({ text: 'G90 …', full: 'G90\nG21' });
   });
 });
+
+describe('defaultLabel', () => {
+  it('names the printer maker', async () => {
+    const { defaultLabel } = await import('./table');
+    const [me] = printerFamilies(baseline, presets);
+    const fam = families(presets, 'process', me)[0];
+    expect(defaultLabel(columnsFor(baseline, fam, presets, me).dflt)).toBe('Acme default');
+    expect(defaultLabel(undefined)).toBe('Default');
+  });
+});

@@ -102,6 +102,15 @@ export function nozzleLabel(nozzle?: string): string {
   return nozzle === undefined ? 'All nozzles' : `${Number(nozzle).toFixed(2)} nozzle`;
 }
 
+/** Vendor folder names as people write them. */
+const MAKERS: Record<string, string> = { Ratrig: 'RatRig', OrcaFilamentLibrary: 'Orca library' };
+
+/** Header for the default column, e.g. "RatRig default". */
+export function defaultLabel(dflt?: Column): string {
+  const vendor = dflt?.resolved.chain[0]?.vendor;
+  return vendor ? `${MAKERS[vendor] ?? vendor} default` : 'Default';
+}
+
 /** One column per member, plus the printer maker's default: the system preset the first member inherits from. */
 export function columnsFor(
   baseline: Baseline,
@@ -210,6 +219,8 @@ export interface Shown {
   full?: string;
   /** The value is not one of the setting's choices: an old value Orca converts or ignores. */
   unknownChoice?: boolean;
+  /** Text that needs more than one short line, such as G-code or notes. */
+  long?: boolean;
 }
 
 /** A value as Orca shows it: choice labels, Yes/No, one value when all extruders agree. */
@@ -235,5 +246,5 @@ export function showValue(def: SettingDef | undefined, value: OrcaValue | undefi
   const firstLine = full.split('\n')[0];
   const short = firstLine.length > 60 ? `${firstLine.slice(0, 57)}…` : firstLine;
   const text = short !== full && !short.endsWith('…') ? `${short} …` : short;
-  return { text: text || (full ? '…' : ''), full: text !== full ? full : undefined, unknownChoice };
+  return { text: text || (full ? '…' : ''), full: text !== full ? full : undefined, unknownChoice, long: text !== full };
 }
