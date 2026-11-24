@@ -13,6 +13,12 @@ const first = (v: OrcaValue | undefined) => (Array.isArray(v) ? v[0] : v);
 const num = (s: string | undefined) => (s === undefined || s.trim() === '' || s === 'nil' ? NaN : Number(s.replace(/%$/, '')));
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
+/** "warn": likely a mistake (line width, temperature range). "hint": only far from the default, often on purpose. */
+export interface Warning {
+  level: 'warn' | 'hint';
+  text: string;
+}
+
 export interface WarnContext {
   /** Nozzle size of the column, e.g. "0.4". */
   nozzle?: string;
@@ -21,7 +27,7 @@ export interface WarnContext {
 }
 
 /** Why a value looks odd, in plain words, or undefined when it looks fine. */
-export function warningFor(key: string, def: SettingDef | undefined, value: OrcaValue | undefined, dflt: OrcaValue | undefined, ctx: WarnContext): string | undefined {
+export function warningFor(key: string, def: SettingDef | undefined, value: OrcaValue | undefined, dflt: OrcaValue | undefined, ctx: WarnContext): Warning | undefined {
   const v = first(value);
   const out: string[] = [];
 
@@ -44,6 +50,7 @@ export function warningFor(key: string, def: SettingDef | undefined, value: Orca
     if (!isNaN(t) && !isNaN(high) && t > high) out.push(`${t} °C is above this filament's range (${low}–${high} °C).`);
   }
 
+  const hard = out.length > 0;
   const d = first(dflt);
   // Line widths are checked against the nozzle instead: the default is often for another nozzle.
   if (def && NUMERIC.test(def.type) && !key.endsWith('line_width') && v !== undefined && d !== undefined && v.endsWith('%') === d.endsWith('%')) {
@@ -54,5 +61,5 @@ export function warningFor(key: string, def: SettingDef | undefined, value: Orca
       out.push(`${fmt(Math.abs(a - b) / Math.abs(b) * 100)}% ${a > b ? 'higher' : 'lower'} than the default (${d}).`);
     }
   }
-  return out.length ? out.join(' ') : undefined;
+  return out.length ? { level: hard ? 'warn' : 'hint', text: out.join(' ') } : undefined;
 }

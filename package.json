@@ -1,7 +1,7 @@
 {
   "name": "sidefin",
   "private": true,
-  "version": "0.3.0-dev.3",
+  "version": "0.3.0-dev.4",
   "description": "SideFin: see your OrcaSlicer profiles next to your printer maker's defaults, per nozzle.",
   "license": "AGPL-3.0-only",
   "type": "module",

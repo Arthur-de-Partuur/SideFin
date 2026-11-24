@@ -3,7 +3,7 @@
 
 import { familyOf, isCompatible, nozzleOf, type PresetFile } from './presets';
 import { findSystemProfile, forVariant, resolvePreset, sameValue, type ResolvedPreset, type ResolvedValue } from './resolve';
-import { warningFor } from './warnings';
+import { warningFor, type Warning } from './warnings';
 import type { Baseline, OrcaValue, PresetKind, ProfileJson, SettingDef, SettingMode } from './types';
 
 export interface PrinterEntry {
@@ -38,8 +38,10 @@ export interface Column {
 export interface Cell extends ResolvedValue {
   /** Differs from the printer maker's default. */
   differs: boolean;
-  /** Why the value looks odd, if it does. */
-  warning?: string;
+  /** Why the value looks odd, if it does and you have not marked it as explained. */
+  warning?: Warning;
+  /** You marked this value as explained, so its warning is not shown. */
+  explained?: boolean;
 }
 
 export interface Row {
@@ -172,7 +174,10 @@ export function columnsFor(
 /** Keys that name the preset itself; they always differ and say nothing. */
 const SKIP = /^(inherits|print_settings_id|filament_settings_id|printer_settings_id|version)$/;
 
-export function buildRows(baseline: Baseline, kind: PresetKind, columns: Column[], dflt?: Column): Row[] {
+/** Whether you marked a value of a preset as explained (deliberate). */
+export type IsExplained = (preset: string, key: string, value: OrcaValue | undefined) => boolean;
+
+export function buildRows(baseline: Baseline, kind: PresetKind, columns: Column[], dflt?: Column, isExplained?: IsExplained): Row[] {
   const keys = new Set(baseline.presetKeys[kind]);
   for (const c of columns) for (const k of Object.keys(c.resolved.values)) keys.add(k);
   const rows: (Row & { order: number })[] = [];
@@ -184,7 +189,8 @@ export function buildRows(baseline: Baseline, kind: PresetKind, columns: Column[
     const cells = columns.map((c, i) => {
       const v = c.resolved.values[key] ?? { value: def?.default, from: 'default', origin: 'default' as const, own: false };
       const warning = warningFor(key, def, v.value, d?.value, { nozzle: c.nozzle, values: valueMaps[i] });
-      return { ...v, differs: d ? !sameValue(v.value, d.value) : false, ...(warning ? { warning } : {}) };
+      const explained = !!warning && !!isExplained?.(c.name, key, v.value);
+      return { ...v, differs: d ? !sameValue(v.value, d.value) : false, ...(warning && !explained ? { warning } : {}), ...(explained ? { explained } : {}) };
     });
     const nozzlesDiffer = cells.some((c) => !sameValue(c.value, cells[0].value));
     const ui = def?.ui && def.ui.tab === kind ? def.ui : undefined;
@@ -288,9 +294,9 @@ export function sliceOf(col: Column, key: string): { full: OrcaValue | undefined
   return { full, index: col.variantIndex, width: shown.length };
 }
 
-/** Number of settings with a warning in at least one nozzle. */
-export function countWarnings(rows: Row[]): number {
-  return rows.filter((r) => r.cells.some((c) => c.warning)).length;
+/** Number of settings with a warning in at least one nozzle; with a level, only warnings of that level. */
+export function countWarnings(rows: Row[], level?: Warning['level']): number {
+  return rows.filter((r) => r.cells.some((c) => c.warning && (!level || c.warning.level === level))).length;
 }
 
 /**

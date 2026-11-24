@@ -91,7 +91,8 @@ function ValueCell({
   const title = [
     cell.origin ? sourceText(cell as Cell) : note,
     v.unknownChoice ? 'Old value: Orca converts or ignores it.' : '',
-    cell.warning ? `Warning: ${cell.warning}` : '',
+    cell.warning ? `${cell.warning.level === 'warn' ? 'Warning' : 'Note'}: ${cell.warning.text}` : '',
+    cell.explained ? 'Marked as deliberate: no warning shown.' : '',
     edited ? 'Changed in SideFin, not exported yet.' : '',
     onEdit ? 'Click to change.' : '',
   ]
@@ -101,11 +102,12 @@ function ValueCell({
     <td className={cls} title={title} onClick={onEdit} onKeyDown={(e) => e.key === 'Enter' && onEdit?.()} tabIndex={onEdit ? 0 : undefined}>
       {v.long ? <div className={open ? 'full' : 'clamp'}>{v.full}</div> : v.text}
       {v.unknownChoice && <span className="old">old</span>}
-      {cell.warning && (
-        <span className="warnmark" aria-label={`Warning: ${cell.warning}`}>
+      {cell.warning?.level === 'warn' && (
+        <span className="warnmark" aria-label={`Warning: ${cell.warning.text}`}>
           !
         </span>
       )}
+      {cell.warning?.level === 'hint' && <span className="hintmark" aria-label={`Note: ${cell.warning.text}`} />}
     </td>
   );
 }
@@ -151,6 +153,29 @@ export function Viewer({
   const [onlyDiffers, setOnlyDiffers] = useState(true);
   const [onlyNozzles, setOnlyNozzles] = useState(false);
   const [onlyWarnings, setOnlyWarnings] = useState(false);
+  // Values you marked as deliberate, per preset and setting; a changed value shows its warning again.
+  const [explained, setExplained] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(store.get('explained') ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const isExplained = useMemo(
+    () => (preset: string, key: string, value: unknown) => explained[`${preset}|${key}`] === JSON.stringify(value),
+    [explained],
+  );
+  /** Mark the values of one setting as deliberate (or not) in every column shown. */
+  const explain = (cols: { name: string; value: unknown }[], key: string, on: boolean) => {
+    const next = { ...explained };
+    for (const { name, value } of cols) {
+      if (on) next[`${name}|${key}`] = JSON.stringify(value);
+      else delete next[`${name}|${key}`];
+    }
+    setExplained(next);
+    store.set('explained', JSON.stringify(next));
+    setEditing(undefined);
+  };
   const [search, setSearch] = useState('');
 
   const fams = useMemo(
@@ -164,19 +189,19 @@ export function Viewer({
         fams.map((f) => {
           const { columns, dflt } = columnsFor(baseline, f, presets, printers);
           const shown = columns.filter(visible);
-          const r = filterRows(buildRows(baseline, kind, shown, dflt), { level });
-          return [f.name, { differs: countDiffers(r), warnings: countWarnings(r) }];
+          const r = filterRows(buildRows(baseline, kind, shown, dflt, isExplained), { level });
+          return [f.name, { differs: countDiffers(r), warnings: countWarnings(r, 'warn') }];
         }),
       ),
-    [fams, baseline, presets, printers, kind, level, hidden, typeMode],
+    [fams, baseline, presets, printers, kind, level, hidden, typeMode, isExplained],
   );
   const family = fams.find((f) => f.name === picked[pickKey]) ?? fams[0];
   const view = useMemo(() => {
     if (!family) return undefined;
     const all = columnsFor(baseline, family, presets, printers);
     const columns = all.columns.filter(visible);
-    return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt) };
-  }, [family, baseline, presets, printers, kind, hidden, typeMode]);
+    return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt, isExplained) };
+  }, [family, baseline, presets, printers, kind, hidden, typeMode, isExplained]);
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
   const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
 
@@ -289,7 +314,7 @@ export function Viewer({
               <span>{f.name}</span>
               <span className="cnts">
                 {counts[f.name]?.warnings > 0 && (
-                  <span className="wcnt" title="Settings with a warning">
+                  <span className="wcnt" title="Settings with a warning (line width or temperature)">
                     !{counts[f.name].warnings}
                   </span>
                 )}
@@ -324,7 +349,7 @@ export function Viewer({
                   )}
                   {(warnCount > 0 || onlyWarnings) && (
                     <button className={`chip warn${onlyWarnings ? ' on' : ''}`} onClick={() => setOnlyWarnings(!onlyWarnings)}>
-                      Only warnings ({warnCount})
+                      Only notes and warnings ({warnCount})
                     </button>
                   )}
                   <button className="chip" title="Download the rows shown here as a CSV file, for a spreadsheet" onClick={downloadCsv}>
@@ -403,7 +428,7 @@ export function Viewer({
                                   edited={edited}
                                   onEdit={
                                     col.file && !r.def?.readonly
-                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), others: typeMode ? view.columns.filter((x) => x.file && x !== col).length : 0, warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }) })
+                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), others: typeMode ? view.columns.filter((x) => x.file && x !== col).length : 0, warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }), onExplain: (on) => explain(view.columns.map((x, j) => ({ name: x.name, value: r.cells[j].value })).filter((_, j) => (on ? r.cells[j].warning : r.cells[j].explained)), r.key, on) })
                                       : undefined
                                   }
                                 />
@@ -433,7 +458,10 @@ export function Viewer({
                   Nozzles differ
                 </span>
                 <span>
-                  <span className="warnmark">!</span> Looks odd: far from the default, line width vs nozzle, or temperature vs filament range
+                  <span className="warnmark">!</span> Likely a mistake: line width vs nozzle, or temperature vs the filament's range
+                </span>
+                <span>
+                  <span className="hintmark" /> Far from the default (click the value to mark it as deliberate)
                 </span>
                 <span>
                   <b>Bold</b>: set in this preset · normal: inherited · <i className="muted">grey italic</i>: Orca's built-in default

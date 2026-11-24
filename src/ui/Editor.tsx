@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { checkItems } from '../core/edit';
 import { showValue, type Cell, type Column } from '../core/table';
 import type { OrcaValue, SettingDef } from '../core/types';
+import type { Warning } from '../core/warnings';
 
 export interface EditTarget {
   key: string;
@@ -18,7 +19,9 @@ export interface EditTarget {
   /** Other presets in view that the change can also be applied to (the By type view). */
   others: number;
   /** Why a value would look odd, by SideFin's warning rules. */
-  warn: (value: OrcaValue) => string | undefined;
+  warn: (value: OrcaValue) => Warning | undefined;
+  /** Mark the current value as deliberate (true), or show its warning again (false). */
+  onExplain: (on: boolean) => void;
 }
 
 const asItems = (v: OrcaValue | undefined) => (v === undefined ? [''] : Array.isArray(v) ? (v.length ? v : ['']) : [v]);
@@ -122,7 +125,19 @@ export function Editor({
         </label>
       )}
       {error && <p className="error small">{error.error}</p>}
-      {!error && warning && <p className="warntext small">Warning: {warning}</p>}
+      {!error && warning && (
+        <p className={`small ${warning.level === 'warn' ? 'warntext' : 'hinttext'}`}>
+          {warning.level === 'warn' ? 'Warning' : 'Note'}: {warning.text}
+        </p>
+      )}
+      {(cell.warning || cell.explained) && (
+        <p className="small">
+          {cell.explained ? 'You marked the current value as deliberate. ' : 'Is the current value deliberate? '}
+          <button className="linkbtn" onClick={() => target.onExplain(!cell.explained)}>
+            {cell.explained ? 'Show the warnings again' : 'Yes, hide the warnings in this row'}
+          </button>
+        </p>
+      )}
       <dl className="small">
         <dt>Now</dt>
         <dd>
