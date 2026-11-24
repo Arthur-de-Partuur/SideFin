@@ -5,6 +5,8 @@ import { warningFor } from '../core/warnings';
 import type { PresetFile } from '../core/presets';
 import { download } from './download';
 import { Editor, type EditTarget } from './Editor';
+import { AdviceDialog, adviceFor, CalibrationPanel, DueList, ManufacturerBar } from './Filament';
+import { dueList, type SideFinData } from '../core/sidefin';
 import {
   buildRows,
   columnsFor,
@@ -120,6 +122,8 @@ export function Viewer({
   changed,
   originals,
   onUpdate,
+  data,
+  onData,
 }: {
   baseline: Baseline;
   presets: PresetFile[];
@@ -129,6 +133,9 @@ export function Viewer({
   /** The presets as read from the folder, by path, before any change. */
   originals: Record<string, ProfileJson>;
   onUpdate: (changes: { file: PresetFile; json: ProfileJson }[]) => void;
+  /** SideFin's own file: manufacturer advice, calibration log, hardware. */
+  data: SideFinData;
+  onData: (next: SideFinData) => void;
 }) {
   const [editing, setEditing] = useState<EditTarget>();
   const allNozzles = useMemo(() => (printers?.printers.map((p) => p.nozzle).filter((n): n is string => !!n) ?? []), [printers]);
@@ -206,6 +213,21 @@ export function Viewer({
     const columns = all.columns.filter(visible);
     return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt, isExplained) };
   }, [family, baseline, presets, printers, kind, hidden, typeMode, isExplained]);
+  const filamentView = kind === 'filament' && !typeMode && !!view && !!family;
+  const advice = filamentView ? data.advice[family!.name] : undefined;
+  const vendorValue = view?.columns[0]?.resolved.values.filament_vendor?.value;
+  const vendor = Array.isArray(vendorValue) ? vendorValue[0] : vendorValue;
+  const [adviceOpen, setAdviceOpen] = useState(false);
+  const due = useMemo(
+    () =>
+      kind === 'filament'
+        ? dueList(
+            data,
+            families(presets, 'filament', printers).map((f) => ({ name: f.name, nozzles: f.members.map((m) => m.nozzle) })),
+          )
+        : [],
+    [kind, data, presets, printers],
+  );
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
   const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
 
@@ -342,6 +364,16 @@ export function Viewer({
               </span>
             </button>
           ))}
+          {kind === 'filament' && (
+            <DueList
+              due={due}
+              onPick={(name) => {
+                setByType(false);
+                store.set('byType', '0');
+                setPicked({ ...picked, [kind]: name });
+              }}
+            />
+          )}
         </aside>
 
         <main className="main">
@@ -387,6 +419,17 @@ export function Viewer({
                 </details>
               )}
 
+              {filamentView && (
+                <>
+                  <ManufacturerBar advice={advice} vendor={vendor} filament={family!.name} onEdit={() => setAdviceOpen(true)} />
+                  <CalibrationPanel
+                    filament={family!.name}
+                    columns={view!.columns}
+                    data={data}
+                    onHardware={(hardware) => onData({ ...data, hardware })}
+                  />
+                </>
+              )}
               <div className="tablewrap">
                 <table>
                   <thead>
@@ -398,12 +441,13 @@ export function Viewer({
                         </th>
                       ))}
                       <th title={view.dflt?.name}>{defaultLabel(view.dflt)}</th>
+                      {filamentView && <th title={advice?.product}>Manufacturer</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {rows.length === 0 && (
                       <tr>
-                        <td colSpan={view.columns.length + 2} className="muted">
+                        <td colSpan={view.columns.length + (filamentView ? 3 : 2)} className="muted">
                           No settings match. Try another level or turn off a filter.
                         </td>
                       </tr>
@@ -416,7 +460,7 @@ export function Viewer({
                         <Fragment key={r.key}>
                           {showHead && (
                             <tr className="grp">
-                              <td colSpan={view.columns.length + 2}>{head}</td>
+                              <td colSpan={view.columns.length + (filamentView ? 3 : 2)}>{head}</td>
                             </tr>
                           )}
                           <tr>
@@ -459,6 +503,11 @@ export function Viewer({
                               extra={`dflt${r.dflt?.origin === 'default' ? ' builtin-d' : ''}`}
                               note={r.dflt?.origin === 'default' ? "Orca's built-in default: no RatRig or Orca profile sets this" : r.dflt ? `From "${r.dflt.from}"` : undefined}
                             />
+                            {filamentView && (
+                              <td className="v mf editable" title={advice?.source ? `From ${advice.source}\nClick to change.` : 'Click to add the maker\'s advice.'} onClick={() => setAdviceOpen(true)}>
+                                {adviceFor(advice, r.key) ?? ''}
+                              </td>
+                            )}
                           </tr>
                         </Fragment>
                       );
@@ -490,6 +539,21 @@ export function Viewer({
           )}
         </main>
       </div>
+      {adviceOpen && family && (
+        <AdviceDialog
+          filament={family.name}
+          vendor={vendor}
+          advice={advice}
+          onClose={() => setAdviceOpen(false)}
+          onSave={(a) => {
+            const next = { ...data.advice };
+            if (a) next[family.name] = a;
+            else delete next[family.name];
+            onData({ ...data, advice: next });
+            setAdviceOpen(false);
+          }}
+        />
+      )}
       {editing && <Editor key={`${editing.column.name}|${editing.key}`} target={editing} onSave={saveEdit} onClear={clearEdit} onClose={() => setEditing(undefined)} />}
     </div>
   );

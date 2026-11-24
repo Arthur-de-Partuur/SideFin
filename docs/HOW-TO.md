@@ -10,6 +10,7 @@
      - `table.ts`: the rows and columns the viewer shows.
      - `edit.ts`: checking a typed value as Orca would, changing a preset, and writing it as Orca does (keys sorted, four spaces).
      - `export.ts`: the zip and CSV files the app hands you.
+     - `sidefin.ts`: SideFin's own file `<data folder>/sidefin/sidefin.json` (maker's advice, calibration log, hardware) and the "Due for calibration" list.
    - `src/ui/`: the screens.
 2. **The defaults builder** (`scripts/baseline/`): reads OrcaSlicer's source for
    one release and writes `public/baseline/<version>.json`. That file holds:
@@ -44,6 +45,6 @@ npm run baseline -- --latest   # build the newest Orca release if it is missing
 
 ## Rules
 
-1. Never commit anyone's own profiles. Tests use made-up fixtures in `src/core/fixtures/`.
+1. Never commit anyone's own profiles or `sidefin.json`. Tests use made-up fixtures in `src/core/fixtures/`.
 2. SideFin shows and reports; it never changes a value on its own.
 3. When the builder cannot read something from Orca's source, it lists it in the report instead of guessing.

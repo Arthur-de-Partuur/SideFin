@@ -2,6 +2,14 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.4.0-dev.1 (2026-11-24)
+
+- SideFin keeps its own file in your Orca data folder: `sidefin/sidefin.json`, next to `user`. It holds what Orca has no place for: the filament maker's advice, the calibration log and the printer's hardware now. Orca's cache cleanup leaves it alone. It is exported with the presets. (G7, decision S1)
+- Filament tab: a "Manufacturer" line above the table and a "Manufacturer" column with the maker's advised values (temperatures, fan, max volumetric speed, density), the product name, a link to the data sheet and other advice such as drying. Click to add or change it. "Find the data sheet" opens a web search. (G2, G7, decision S2)
+- Calibration panel per filament: pressure advance and max volumetric speed for each nozzle, with the value in the preset now and the date of the last test from the log. Tests done on other hardware are marked. Running and logging tests comes in 0.6. (G7, decision S3)
+- "Due for calibration" in the side bar: filaments and nozzles with no test yet, or a test on other hardware. Click one to open it. (G7)
+- Undo and Discard also cover the advice, log and hardware.
+
 ## 0.3.0 (2026-11-24)
 
 - Click a value of your preset to change it: a number field, yes/no, a list of choices or a text box for G-code. Each change can be undone, and "Back to inherited" removes the preset's own value. (G4)

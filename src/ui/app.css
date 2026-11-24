@@ -150,3 +150,21 @@ dialog.editor.wide { width: min(860px, calc(100vw - 32px)); }
 .hintmark { display: inline-block; margin-left: 6px; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--muted); vertical-align: 1px; }
 .hinttext { color: var(--muted); }
 .linkbtn { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-size: inherit; }
+
+/* Filament: maker's advice, calibration, due list */
+.mfbar { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.mfbar .lbl { margin-right: 2px; }
+td.v.mf { color: var(--muted); font-style: italic; min-width: 90px; }
+details.cal { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; flex: none; }
+details.cal summary { cursor: pointer; font-weight: 600; }
+table.caltable { width: auto; margin: 6px 0 2px; }
+table.caltable th, table.caltable td { padding: 3px 14px 3px 0; border-bottom: 1px solid var(--line); text-align: left; }
+.badge { display: inline-block; font-size: 11px; border-radius: 999px; padding: 0 7px; border: 1px solid var(--warn); color: var(--warn); margin-left: 4px; font-family: system-ui, sans-serif; white-space: nowrap; }
+.hw { margin: 6px 0 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hw input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; width: 160px; }
+.due { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.due .fam { font-size: 12.5px; align-items: center; }
+dialog.editor input.wide { width: 100%; }
+dialog.advice .fields label > input { flex: 1; width: auto; max-width: 360px; }
+dialog.advice .fields label > textarea { flex: 1; }
+dialog.advice .fields .lbl { min-width: 150px; }

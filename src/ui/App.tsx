@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collectPresets, type PresetFile } from '../core/presets';
 import { changedKeys } from '../core/edit';
+import { DATA_PATH, dataJson, parseData, type SideFinData } from '../core/sidefin';
 import { printerFamilies } from '../core/table';
 import type { Baseline, BaselineIndex, ProfileJson } from '../core/types';
 import { isNewer, onlineVersion } from '../core/update';
@@ -54,11 +55,18 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [edits, setEdits] = useState<Edits>({});
-  const [history, setHistory] = useState<Edits[]>([]);
+  const [history, setHistory] = useState<{ edits: Edits; data: SideFinData }[]>([]);
+  // SideFin's own file: as read from the folder, and as changed here.
+  const [dataRead, setDataRead] = useState<{ data: SideFinData; exists: boolean; error?: string }>(() => ({ ...parseData(undefined), exists: false }));
+  const [data, setData] = useState<SideFinData>(dataRead.data);
 
   const keepEdits = (next: Edits, folder = loaded?.folder) => {
     setEdits(next);
     if (folder) store.set(editsKey(folder), JSON.stringify(next));
+  };
+  const keepData = (next: SideFinData, folder = loaded?.folder) => {
+    setData(next);
+    if (folder) store.set(`data.${folder}`, dataJson(next));
   };
 
   useEffect(() => {
@@ -96,7 +104,7 @@ export function App() {
   const load = (folder: string, files: FolderFile[]) => {
     const { presets, skipped } = collectPresets(files);
     const paths = new Set(presets.map((p) => p.path));
-    setLoaded({ folder, presets, skipped, files: files.filter((f) => paths.has(f.path.replace(/\\/g, '/'))) });
+    setLoaded({ folder, presets, skipped, files: files.filter((f) => paths.has(f.path.replace(/\\/g, '/')) || f.path.replace(/\\/g, '/') === DATA_PATH) });
     let saved: Edits = {};
     try {
       saved = JSON.parse(store.get(editsKey(folder)) ?? '{}');
@@ -105,6 +113,11 @@ export function App() {
     }
     // Keep only changes to presets that are still there.
     keepEdits(Object.fromEntries(Object.entries(saved).filter(([p]) => paths.has(p))), folder);
+    const file = files.find((f) => f.path.replace(/\\/g, '/') === DATA_PATH);
+    const read = { ...parseData(file?.text), exists: !!file };
+    setDataRead(read);
+    const kept = store.get(`data.${folder}`);
+    setData(kept ? parseData(kept).data : read.data);
     setHistory([]);
   };
 
@@ -145,8 +158,9 @@ export function App() {
   );
   const originals = useMemo(() => Object.fromEntries((loaded?.presets ?? []).map((p) => [p.path, p.json])), [loaded]);
   /** Apply changes to one or more presets as one step, so one Undo takes them all back. */
+  const snapshot = () => setHistory([...history, { edits, data }]);
   const update = (changes: { file: PresetFile; json: ProfileJson }[]) => {
-    setHistory([...history, edits]);
+    snapshot();
     const next = { ...edits };
     for (const { file, json } of changes) {
       const original = loaded?.presets.find((p) => p.path === file.path)?.json;
@@ -155,15 +169,23 @@ export function App() {
     }
     keepEdits(next);
   };
+  const updateData = (next: SideFinData) => {
+    snapshot();
+    keepData(next);
+  };
   const undo = () => {
     if (!history.length) return;
-    keepEdits(history[history.length - 1]);
+    const last = history[history.length - 1];
+    keepEdits(last.edits);
+    keepData(last.data);
     setHistory(history.slice(0, -1));
   };
   const discard = () => {
-    setHistory([...history, edits]);
+    snapshot();
     keepEdits({});
+    keepData(dataRead.data);
   };
+  const dataChanged = dataJson(data) !== dataJson(dataRead.data);
 
   const printers = useMemo(() => (baseline && loaded ? printerFamilies(baseline, presets) : []), [baseline, loaded, presets]);
   const printer = printers.find((p) => p.name === printerName) ?? printers[0];
@@ -279,10 +301,18 @@ export function App() {
 
       {loaded && loaded.presets.length > 0 && !baseline && <p className="muted">Loading Orca {orca} defaults…</p>}
       {loaded && baseline && (
-        <Changes baseline={baseline} originals={loaded.presets} current={edits} canUndo={history.length > 0} onUndo={undo} onDiscard={discard} />
+        <Changes
+          baseline={baseline}
+          originals={loaded.presets}
+          current={edits}
+          dataFile={dataChanged ? { path: DATA_PATH, text: dataJson(data), isNew: !dataRead.exists } : undefined}
+          canUndo={history.length > 0}
+          onUndo={undo}
+          onDiscard={discard}
+        />
       )}
       {loaded && baseline && loaded.presets.length > 0 && (
-        <Viewer baseline={baseline} presets={presets} printers={printer} changed={changed} originals={originals} onUpdate={update} />
+        <Viewer baseline={baseline} presets={presets} printers={printer} changed={changed} originals={originals} onUpdate={update} data={data} onData={updateData} />
       )}
 
       <footer>

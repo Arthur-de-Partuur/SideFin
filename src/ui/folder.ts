@@ -24,11 +24,11 @@ const SKIP = /^(system|log|cache|ota|plugins|printers|hms|user_backup.*|\..*)$/i
 
 async function readHandle(dir: FileSystemDirectoryHandle, prefix: string, depth: number, out: FolderFile[]) {
   if (depth > 5) return;
-  // In an Orca data folder, only the "user" folder holds your presets.
   let entries: FileSystemHandle[] = [];
   for await (const h of dir.values()) entries.push(h);
+  // In an Orca data folder, only "user" holds your presets; "sidefin" holds SideFin's own file.
   const user = entries.find((h) => h.kind === 'directory' && h.name === 'user');
-  if (depth === 0 && user) entries = [user];
+  if (depth === 0 && user) entries = entries.filter((h) => h.kind === 'directory' && (h.name === 'user' || h.name === 'sidefin'));
   for (const h of entries) {
     const path = prefix ? `${prefix}/${h.name}` : h.name;
     if (h.kind === 'directory') {
