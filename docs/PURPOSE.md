@@ -50,3 +50,7 @@ compare two presets.
 | 5 | 0.5 | Orca update changes | G5 |
 | 6 | 0.6 | Calibration working | G7, G8 |
 | 7 | 1.0 | Save directly into the Orca data folder, with backup | G4 |
+
+## Parked ideas (no goal yet)
+
+1. Open an Orca project (.3mf) and show which settings it overrides on top of the saved presets. Found on 24 Nov 2026: a project changed 7 process settings (walls, brim, supports, first layer speeds) that the presets do not show.
