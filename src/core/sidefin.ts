@@ -23,10 +23,12 @@ export interface Advice {
   note?: string;
 }
 
-export type CalibrationTest = 'pa' | 'maxflow';
+export type CalibrationTest = 'pa' | 'em' | 'maxflow';
 
 export const TESTS: { test: CalibrationTest; label: string; key: string }[] = [
   { test: 'pa', label: 'Pressure advance', key: 'pressure_advance' },
+  // After pressure advance, as Ellis' guide advises.
+  { test: 'em', label: 'Extrusion multiplier', key: 'filament_flow_ratio' },
   { test: 'maxflow', label: 'Max volumetric speed', key: 'filament_max_volumetric_speed' },
 ];
 
@@ -41,6 +43,8 @@ export interface Calibration {
   date: string;
   /** The result, when logged. */
   value?: string;
+  /** Nozzle temperature the result holds for (max flow), in °C. */
+  temperature?: number;
   /** Hardware used, when logged. */
   hardware?: Partial<Hardware>;
   method?: string;
@@ -90,6 +94,13 @@ export function latest(data: SideFinData, filament: string, test: CalibrationTes
   return data.calibrations
     .filter((c) => c.filament === filament && c.test === test && (c.nozzle === undefined || nozzle === undefined || Number(c.nozzle) === Number(nozzle)))
     .sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
+/** The method last used for a test, on any filament: the dialog starts with it. */
+export function lastMethod(data: SideFinData, test: CalibrationTest, known: string[]): string | undefined {
+  return data.calibrations
+    .filter((c) => c.test === test && c.method && known.includes(c.method))
+    .sort((a, b) => b.date.localeCompare(a.date))[0]?.method;
 }
 
 export interface Due {

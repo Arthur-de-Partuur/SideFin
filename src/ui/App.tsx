@@ -159,8 +159,9 @@ export function App() {
   const originals = useMemo(() => Object.fromEntries((loaded?.presets ?? []).map((p) => [p.path, p.json])), [loaded]);
   /** Apply changes to one or more presets as one step, so one Undo takes them all back. */
   const snapshot = () => setHistory([...history, { edits, data }]);
-  const update = (changes: { file: PresetFile; json: ProfileJson }[]) => {
+  const update = (changes: { file: PresetFile; json: ProfileJson }[], nextData?: SideFinData) => {
     snapshot();
+    if (nextData) keepData(nextData);
     const next = { ...edits };
     for (const { file, json } of changes) {
       const original = loaded?.presets.find((p) => p.path === file.path)?.json;

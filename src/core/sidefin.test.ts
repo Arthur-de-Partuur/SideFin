@@ -36,6 +36,8 @@ describe('sidefin.json', () => {
     expect(due).toEqual([
       { filament: 'PETG A @Me', test: 'pa', nozzle: '0.4', reason: 'other hardware' },
       { filament: 'PETG A @Me', test: 'pa', nozzle: '0.6', reason: 'none yet' },
+      { filament: 'PETG A @Me', test: 'em', nozzle: '0.4', reason: 'none yet' },
+      { filament: 'PETG A @Me', test: 'em', nozzle: '0.6', reason: 'none yet' },
     ]);
   });
 

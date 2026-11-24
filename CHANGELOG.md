@@ -2,7 +2,13 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
-## Next
+## 0.4.0-dev.2 (2026-11-24)
+
+Calibration working, brought forward from step 6 (G7, remark C3):
+
+- "Calibrate" for each test and nozzle in the Calibration panel. Pick a method: Orca's own test, Ellis' PA tool, Ellis' extrusion multiplier cubes, or the hotend flow tester. SideFin shows the steps, a link to the tool, and the values to type in, taken from your presets (bed size, temperatures, fan, retraction, and a range around the value now). The method you used last is picked first.
+- Enter the result (for max flow, also the nozzle temperature), the date, and a note. Saving adds it to the calibration log with your hardware now, and can set it in the preset for that nozzle. One Undo takes both back.
+- Extrusion multiplier (flow ratio) is a third test, after pressure advance. For Orca's flow ratio test you can enter the block modifier, and SideFin works out the ratio.
 
 - Calibration is shown more calmly (remarks C1, C2): the "Due for calibration" list is gone; each filament shows a small grey "N to calibrate", the details stay in its Calibration panel, and a filter shows only filaments to calibrate. (G7)
 - "Value is OK" in the Calibration panel logs the value in the preset now as good, so that test is no longer due. (G7)

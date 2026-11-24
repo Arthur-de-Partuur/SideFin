@@ -5,8 +5,8 @@ import { warningFor } from '../core/warnings';
 import type { PresetFile } from '../core/presets';
 import { download } from './download';
 import { Editor, type EditTarget } from './Editor';
-import { AdviceDialog, adviceFor, CalibrationPanel, ManufacturerBar } from './Filament';
-import { dueList, type SideFinData } from '../core/sidefin';
+import { AdviceDialog, adviceFor, CalibrateDialog, CalibrationPanel, ManufacturerBar } from './Filament';
+import { dueList, TESTS, type Calibration, type CalibrationTest, type SideFinData } from '../core/sidefin';
 import {
   buildRows,
   columnsFor,
@@ -132,7 +132,8 @@ export function Viewer({
   changed: Record<string, string[]>;
   /** The presets as read from the folder, by path, before any change. */
   originals: Record<string, ProfileJson>;
-  onUpdate: (changes: { file: PresetFile; json: ProfileJson }[]) => void;
+  /** Change presets; with data, the calibration log changes in the same Undo step. */
+  onUpdate: (changes: { file: PresetFile; json: ProfileJson }[], data?: SideFinData) => void;
   /** SideFin's own file: manufacturer advice, calibration log, hardware. */
   data: SideFinData;
   onData: (next: SideFinData) => void;
@@ -236,6 +237,23 @@ export function Viewer({
     return n;
   }, [due]);
   const [onlyDue, setOnlyDue] = useState(false);
+  const [calibrating, setCalibrating] = useState<{ test: CalibrationTest; column: Column }>();
+  const printerValues = (nozzle?: string) => {
+    const p = printers?.printers.find((x) => x.nozzle !== undefined && nozzle !== undefined && Number(x.nozzle) === Number(nozzle)) ?? printers?.printers[0];
+    return Object.fromEntries(Object.entries(p?.resolved.values ?? {}).map(([k, v]) => [k, v.value]));
+  };
+  const saveCalibration = (entry: Calibration, apply: boolean) => {
+    if (!calibrating) return;
+    const nextData = { ...data, calibrations: [...data.calibrations, entry] };
+    const col = calibrating.column;
+    const key = TESTS.find((t) => t.test === entry.test)!.key;
+    if (apply && col.file && entry.value !== undefined) {
+      const shown = col.resolved.values[key]?.value ?? baseline.settings[key]?.default;
+      const items = Array.isArray(shown) && shown.length > 1 ? shown.map(() => entry.value!) : [entry.value];
+      onUpdate([{ file: col.file, json: setValue(col.file.json, key, items, shown, sliceOf(col, key)) }], nextData);
+    } else onData(nextData);
+    setCalibrating(undefined);
+  };
   const showDue = kind === 'filament' && !typeMode;
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
   const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
@@ -440,6 +458,7 @@ export function Viewer({
                     data={data}
                     onHardware={(hardware) => onData({ ...data, hardware })}
                     onLog={(c) => onData({ ...data, calibrations: [...data.calibrations, c] })}
+                    onCalibrate={(test, column) => setCalibrating({ test, column })}
                   />
                 </>
               )}
@@ -552,6 +571,19 @@ export function Viewer({
           )}
         </main>
       </div>
+      {calibrating && family && (
+        <CalibrateDialog
+          filament={family.name}
+          test={calibrating.test}
+          column={calibrating.column}
+          printer={printerValues(calibrating.column.nozzle)}
+          data={data}
+          def={baseline.settings[TESTS.find((t) => t.test === calibrating.test)!.key]}
+          canApply={!!calibrating.column.file}
+          onSave={saveCalibration}
+          onClose={() => setCalibrating(undefined)}
+        />
+      )}
       {adviceOpen && family && (
         <AdviceDialog
           filament={family.name}

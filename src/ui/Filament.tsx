@@ -7,15 +7,19 @@ import { showValue } from '../core/table';
 import {
   datasheetSearch,
   filamentProfilesLink,
+  lastMethod,
   latest,
   otherHardware,
   TESTS,
   type Advice,
   type Calibration,
+  type CalibrationTest,
   type Hardware,
   type SideFinData,
 } from '../core/sidefin';
-import type { OrcaValue } from '../core/types';
+import type { OrcaValue, SettingDef } from '../core/types';
+import { fmt, methodById, methodsFor, num, orcaFlowRatio, setup } from '../core/calibrate';
+import { checkItem } from '../core/edit';
 
 /** The advice fields the dialog offers, by Orca setting key. */
 export const ADVICE_FIELDS: { key: string; label: string; hint: string }[] = [
@@ -160,15 +164,16 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 /** Log method for "the value in the preset is fine as it is". */
-const ACCEPTED = 'accepted as is';
+export const ACCEPTED = 'accepted as is';
 
-/** Calibration results per nozzle, read from the log. Running and logging tests comes in a later step. */
+/** Calibration results per nozzle, read from the log, with Calibrate and Value is OK per test. */
 export function CalibrationPanel({
   filament,
   columns,
   data,
   onHardware,
   onLog,
+  onCalibrate,
 }: {
   filament: string;
   columns: Column[];
@@ -176,13 +181,15 @@ export function CalibrationPanel({
   onHardware: (h: Hardware) => void;
   /** Add a line to the calibration log. */
   onLog: (c: Calibration) => void;
+  /** Open the Calibrate dialog for a test on one nozzle. */
+  onCalibrate: (test: CalibrationTest, column: Column) => void;
 }) {
   const [editHw, setEditHw] = useState(false);
   const [hw, setHw] = useState<Hardware>(data.hardware ?? { hotend: '', extruder: '' });
   return (
     <details className="cal" open>
       <summary>
-        Calibration <span className="muted small">· logging and running tests comes in version 0.6</span>
+        Calibration <span className="muted small">· click Calibrate to set up a test and log its result</span>
       </summary>
       <table className="caltable">
         <thead>
@@ -218,7 +225,7 @@ export function CalibrationPanel({
                     {entry ? (
                       <span className="muted">
                         {' '}
-                        · {[entry.method === ACCEPTED ? 'OK as is' : entry.value, fmtDate(entry.date)].filter(Boolean).join(' · ')}
+                        · {[entry.method === ACCEPTED ? 'OK as is' : entry.value, entry.temperature ? `at ${entry.temperature} °C` : '', fmtDate(entry.date)].filter(Boolean).join(' · ')}
                       </span>
                     ) : (
                       <span className="muted"> · not calibrated</span>
@@ -229,11 +236,16 @@ export function CalibrationPanel({
                         · other hardware
                       </span>
                     )}
-                    {(!entry || other) && (
-                      <button className="linkbtn" title="Log the value in the preset now as good, so this test is no longer due" onClick={accept}>
-                        Value is OK
+                    <span className="calacts">
+                      <button className="linkbtn" title="Set up the test, then log the result" onClick={() => onCalibrate(t.test, c)}>
+                        Calibrate
                       </button>
-                    )}
+                      {(!entry || other) && (
+                        <button className="linkbtn" title="Log the value in the preset now as good, so this test is no longer due" onClick={accept}>
+                          Value is OK
+                        </button>
+                      )}
+                    </span>
                     {entry?.note && <div className="muted small">{entry.note}</div>}
                   </td>
                 );
@@ -268,5 +280,163 @@ export function CalibrationPanel({
         )}
       </p>
     </details>
+  );
+}
+
+/**
+ * Calibrate one test on one nozzle: pick a method, see what to set up in
+ * Orca or the outside tool, then enter the result. Saving logs it, and can
+ * set it in the preset for this nozzle.
+ */
+export function CalibrateDialog({
+  filament,
+  test,
+  column,
+  printer,
+  data,
+  def,
+  canApply,
+  onSave,
+  onClose,
+}: {
+  filament: string;
+  test: CalibrationTest;
+  column: Column;
+  /** The printer preset's values in effect for this nozzle. */
+  printer: Record<string, OrcaValue | undefined>;
+  data: SideFinData;
+  /** The Orca setting the result goes into. */
+  def?: SettingDef;
+  /** The nozzle has a user preset to change. */
+  canApply: boolean;
+  onSave: (entry: Calibration, apply: boolean) => void;
+  onClose: () => void;
+}) {
+  const dialog = useModal();
+  const info = TESTS.find((t) => t.test === test)!;
+  const methods = methodsFor(test);
+  const values = Object.fromEntries(Object.entries(column.resolved.values).map(([k, v]) => [k, v.value]));
+  const [methodId, setMethodId] = useState(lastMethod(data, test, methods.map((m) => m.id)) ?? methods[0].id);
+  const method = methodById(methodId)!;
+  const now = num(values[info.key]);
+  const [value, setValue] = useState('');
+  const [modifier, setModifier] = useState('');
+  const [temperature, setTemperature] = useState(test === 'maxflow' ? String(num(values.nozzle_temperature) ?? '') : '');
+  const [date, setDate] = useState(today());
+  const [note, setNote] = useState('');
+  const [apply, setApply] = useState(canApply);
+  const lines = setup(method, { nozzle: column.nozzle, filament: values, printer });
+  const checked = value.trim() ? checkItem(def, value) : undefined;
+  const error = checked && 'error' in checked ? checked.error : undefined;
+  const temp = temperature.trim() ? Number(temperature) : undefined;
+  const tempError = temp !== undefined && !(temp > 0 && temp < 600) ? 'Enter the temperature in \u00b0C.' : undefined;
+  const ok = !!checked && !error && !tempError && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const save = () => {
+    if (!ok || !checked || 'error' in checked) return;
+    onSave(
+      {
+        filament,
+        ...(column.nozzle ? { nozzle: column.nozzle } : {}),
+        test,
+        date,
+        value: checked.value,
+        ...(temp !== undefined ? { temperature: temp } : {}),
+        ...(data.hardware ? { hardware: data.hardware } : {}),
+        method: method.id,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      },
+      apply && canApply,
+    );
+  };
+  return (
+    <dialog ref={dialog} className="editor calibrate" onClose={onClose} onCancel={onClose}>
+      <h3>
+        {info.label} · {column.label}
+      </h3>
+      <p className="muted small">
+        {filament} · now {now !== undefined ? fmt(now) : 'not set'} · {data.hardware ? `${data.hardware.hotend} + ${data.hardware.extruder}` : 'hardware not set'}
+      </p>
+      <div className="methods" role="radiogroup" aria-label="Method">
+        {methods.map((m) => (
+          <label key={m.id} className="check">
+            <input type="radio" name="method" checked={m.id === methodId} onChange={() => setMethodId(m.id)} />
+            {m.label}
+          </label>
+        ))}
+      </div>
+      <ol className="small steps">
+        {method.steps.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ol>
+      {method.url && (
+        <p className="small">
+          <a href={method.url} target="_blank" rel="noreferrer">
+            Open {method.label.replace(/^Orca: /, '')}
+          </a>{' '}
+          <span className="muted">(new tab)</span>
+        </p>
+      )}
+      {lines.length > 0 && (
+        <table className="setup small">
+          <tbody>
+            {lines.map((l) => (
+              <tr key={l.label}>
+                <td className="muted">{l.label}</td>
+                <td className="v">{l.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="fields">
+        {method.id === 'orca-em' && (
+          <label>
+            <span className="lbl">Block modifier (optional)</span>
+            <input
+              value={modifier}
+              placeholder="e.g. -5 or 2"
+              onChange={(e) => {
+                setModifier(e.target.value);
+                const m = Number(e.target.value);
+                if (e.target.value.trim() && Number.isFinite(m)) setValue(fmt(orcaFlowRatio(now ?? 1, m)));
+              }}
+            />
+          </label>
+        )}
+        <label>
+          <span className="lbl">Result</span>
+          <input value={value} placeholder={def?.unit ? def.unit : 'value'} onChange={(e) => setValue(e.target.value)} autoFocus />
+        </label>
+        {error && <p className="error small">{error}</p>}
+        {test === 'maxflow' && (
+          <label>
+            <span className="lbl">At nozzle temperature</span>
+            <input value={temperature} placeholder="°C" onChange={(e) => setTemperature(e.target.value)} />
+          </label>
+        )}
+        {tempError && <p className="error small">{tempError}</p>}
+        <label>
+          <span className="lbl">Date</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label>
+          <span className="lbl">Note</span>
+          <textarea rows={2} value={note} placeholder="what you saw, spool, ..." onChange={(e) => setNote(e.target.value)} />
+        </label>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={apply && canApply} disabled={!canApply} onChange={(e) => setApply(e.target.checked)} />
+        {canApply ? `Also set ${info.label.toLowerCase()} in the preset for the ${column.label.toLowerCase()}` : 'This nozzle has no preset of yours to change'}
+      </label>
+      <div className="actions">
+        <button className="primary" onClick={save} disabled={!ok}>
+          Save to the log
+        </button>
+        <button className="ghost" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </dialog>
   );
 }
