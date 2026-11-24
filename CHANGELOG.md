@@ -2,7 +2,7 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
-## 0.2.0 (in progress)
+## 0.2.0 (2026-11-24)
 
 Feedback round 1 (0.2.0-dev.2):
 
