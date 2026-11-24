@@ -115,6 +115,38 @@ export function resolvePreset(
   return { kind, name: preset.name, chain, values, problems };
 }
 
+/** The setting that lists the extruder variants of each kind of preset. */
+const VARIANT_LIST: Record<PresetKind, string> = {
+  process: 'print_extruder_variant',
+  filament: 'filament_extruder_variant',
+  printer: 'printer_extruder_variant',
+};
+
+/**
+ * Keep only the values for one extruder variant, such as "Direct Drive Standard".
+ * Since Orca 2.4 some settings hold one value per variant; when slicing, Orca
+ * uses the variant of the printer (printer_extruder_variant). Values that do
+ * not have one item per variant are left as they are.
+ */
+export function forVariant(r: ResolvedPreset, baseline: Baseline, variant: string): ResolvedPreset {
+  const listKey = VARIANT_LIST[r.kind];
+  const variants = items(r.values[listKey]?.value);
+  const i = variants.indexOf(variant);
+  if (i < 0) return r;
+  const keys = r.kind === 'process' ? baseline.variantKeys.process : r.kind === 'filament' ? baseline.variantKeys.filament : baseline.variantKeys.printer;
+  const pairs = new Set(r.kind === 'printer' ? baseline.variantKeys.printerPairs : []);
+  const values = { ...r.values };
+  const pick = (key: string, width: number) => {
+    const v = values[key]?.value;
+    if (!Array.isArray(v) || v.length !== variants.length * width) return;
+    values[key] = { ...values[key], value: v.slice(i * width, i * width + width) };
+  };
+  for (const key of keys) pick(key, 1);
+  for (const key of pairs) pick(key, 2);
+  pick(listKey, 1);
+  return { ...r, values };
+}
+
 /** Split a value into items: Orca lists per-extruder values, one item per extruder. */
 function items(v: OrcaValue | undefined): string[] {
   if (v === undefined) return [];

@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { join, resolve } from 'node:path';
 import type { Baseline, BaselineIndex, PresetKind, ProfileJson } from '../../src/core/types';
 import { parsePrintConfig, readConstants } from './parsePrintConfig';
-import { parsePresetKeys } from './parsePreset';
+import { parsePresetKeys, parseVariantKeys } from './parsePreset';
 import { parseTab } from './parseTab';
 
 const REPO = 'https://github.com/OrcaSlicer/OrcaSlicer';
@@ -127,6 +127,7 @@ export function buildBaseline(srcDir: string, tag: string, commit?: string): Bas
     generatedAt: new Date().toISOString(),
     settings,
     presetKeys,
+    variantKeys: parseVariantKeys(printConfig),
     profiles,
     report: {
       settings: all.length,

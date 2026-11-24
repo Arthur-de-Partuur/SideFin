@@ -56,9 +56,19 @@ export interface Baseline {
   settings: Record<string, SettingDef>;
   /** The settings each kind of preset stores, as listed in Orca's Preset.cpp. */
   presetKeys: Record<PresetKind, string[]>;
+  /** Settings that hold one value per extruder variant (Orca 2.4 and later). */
+  variantKeys: VariantKeys;
   /** System profiles by kind, keyed "<vendor>/<name>", unresolved (as in Orca's resources/profiles). */
   profiles: Record<PresetKind, Record<string, ProfileJson & { vendor: string }>>;
   report: { settings: number; withDefault: number; shownInOrca: number; unparsedDefaults: string[] };
+}
+
+export interface VariantKeys {
+  process: string[];
+  filament: string[];
+  printer: string[];
+  /** Two values per variant: normal and silent mode machine limits. */
+  printerPairs: string[];
 }
 
 export interface BaselineIndex {
