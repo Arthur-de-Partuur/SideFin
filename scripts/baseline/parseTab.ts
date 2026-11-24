@@ -39,10 +39,16 @@ export function parseTab(source: string, knownKeys: Set<string>): Record<string,
     target[key] = { tab, page, group, order: order++ };
   };
 
-  starts.forEach((fn, i) => {
-    const tab = BUILDERS[fn.name];
-    if (!tab) return;
-    const body = src.slice(fn.index, i + 1 < starts.length ? starts[i + 1].index : undefined);
+  // Walk the builders in the order of BUILDERS: Orca shows the Filament page
+  // before the Setting Overrides page, whatever the order in the source file.
+  const builderOrder = Object.keys(BUILDERS);
+  const bodies = starts
+    .map((fn, i) => ({ name: fn.name, body: src.slice(fn.index, i + 1 < starts.length ? starts[i + 1].index : undefined) }))
+    .filter((f) => f.name in BUILDERS)
+    .sort((x, y) => builderOrder.indexOf(x.name) - builderOrder.indexOf(y.name));
+
+  bodies.forEach(({ name, body }) => {
+    const tab = BUILDERS[name];
     let page = '';
     let group = '';
     let pending: string[] = []; // keys listed in a vector, shown in the next group

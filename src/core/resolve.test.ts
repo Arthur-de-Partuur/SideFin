@@ -50,6 +50,7 @@ describe('sameValue', () => {
     expect(sameValue(['0.4'], '0.4')).toBe(true);
     expect(sameValue('50%', '50')).toBe(false);
     expect(sameValue(['0.4', '0.6'], ['0.4'])).toBe(false);
+    expect(sameValue(['100', '100'], ['100'])).toBe(true);
     expect(sameValue('', '0')).toBe(false);
     expect(sameValue(undefined, undefined)).toBe(true);
   });

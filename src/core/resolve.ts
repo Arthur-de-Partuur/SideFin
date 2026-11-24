@@ -108,7 +108,7 @@ export function resolvePreset(
     } else {
       values[key] = { value: baseline.settings[key]?.default, from: 'default', origin: 'default', own: false };
     }
-    if (!baseline.settings[key]) {
+    if (!baseline.settings[key] && values[key].origin === 'user') {
       problems.push(`"${key}" (set in "${values[key].from}") is not a setting in Orca ${baseline.orcaVersion}, so Orca ignores it.`);
     }
   }
@@ -167,7 +167,11 @@ function sameItem(a: string, b: string): boolean {
 export function sameValue(a: OrcaValue | undefined, b: OrcaValue | undefined): boolean {
   const x = items(a);
   const y = items(b);
-  return x.length === y.length && x.every((v, i) => sameItem(v, y[i]));
+  if (x.length === y.length) return x.every((v, i) => sameItem(v, y[i]));
+  // Orca fills a short list with its first value (one per extruder, or normal
+  // and silent machine limits), so ["100"] equals ["100", "100"].
+  const [short, long] = x.length < y.length ? [x, y] : [y, x];
+  return short.length === 1 && long.every((v) => sameItem(v, short[0]));
 }
 
 /** Keys whose value differs between two resolved presets, in the order of the first. */
