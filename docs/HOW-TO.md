@@ -8,6 +8,8 @@
      - `resolve.ts`: the value in effect of each setting and where it comes from.
      - `presets.ts`: finds presets in the chosen folder and groups them per nozzle.
      - `table.ts`: the rows and columns the viewer shows.
+     - `edit.ts`: checking a typed value as Orca would, changing a preset, and writing it as Orca does (keys sorted, four spaces).
+     - `export.ts`: the zip and CSV files the app hands you.
    - `src/ui/`: the screens.
 2. **The defaults builder** (`scripts/baseline/`): reads OrcaSlicer's source for
    one release and writes `public/baseline/<version>.json`. That file holds:

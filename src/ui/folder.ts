@@ -46,11 +46,11 @@ export async function readFolder(dir: FileSystemDirectoryHandle): Promise<Folder
   return out;
 }
 
-/** For browsers without folder access: the files of an <input webkitdirectory>. */
+/** For browsers without folder access: the files of an <input webkitdirectory>. Paths are made relative to the chosen folder. */
 export async function readFileList(list: FileList): Promise<FolderFile[]> {
   const files = [...list].filter((f) => f.name.toLowerCase().endsWith('.json'));
   const rel = (f: File) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
-  return Promise.all(files.filter((f) => !rel(f).split('/').slice(1, -1).some((p) => SKIP.test(p))).map(async (f) => ({ path: rel(f), text: await f.text() })));
+  return Promise.all(files.filter((f) => !rel(f).split('/').slice(1, -1).some((p) => SKIP.test(p))).map(async (f) => ({ path: rel(f).split('/').slice(1).join('/') || f.name, text: await f.text() })));
 }
 
 // Remember the chosen folder between visits (Chrome and Edge only).

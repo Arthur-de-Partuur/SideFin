@@ -2,6 +2,19 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.3.0 (2026-11-24)
+
+- Click a value of your preset to change it: a number field, yes/no, a list of choices or a text box for G-code. Each change can be undone, and "Back to inherited" removes the preset's own value. (G4)
+- A value of the wrong type or outside Orca's own limits is refused, with the reason. (G4)
+- Settings with one value per extruder type (Orca 2.4 and later) change only for the printer's extruder type. (G4)
+- Changes are kept in the browser until you export them, also after a reload. Changed values are marked. (G4)
+- Export: the changed presets as Orca JSON files, one file or a zip with the folders. Settings your Orca version no longer knows can be removed on export, also from unchanged presets. (G4)
+- Backup: download all your presets, exactly as read, as a zip. (G6)
+- Download the table as CSV. (G1)
+- For a changed value, the edit box shows what your file holds, with "Back to my value". (G4, remark E1)
+- Warnings for values that look odd (G4, feedback point 7). A red "!" for a likely mistake: a line width under 60% or over 200% of the nozzle, or a nozzle temperature outside the filament's range. A small grey circle for a number more than 50% from the printer maker's default (0 and negative values left out). Click a value to mark a row as deliberate; its marks stay hidden until the value changes (0.3.0-dev.4). Filter "Only notes and warnings"; the editor warns while you type.
+- Filament tab "By type": all filaments of one type (PLA, PETG, ...) side by side for one nozzle, with "Also set this for the other filaments shown" in the editor. One Undo takes such a change back. (G3, G4, feedback point 9)
+
 ## 0.2.0 (2026-11-24)
 
 Feedback round 1 (0.2.0-dev.2):

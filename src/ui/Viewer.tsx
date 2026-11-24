@@ -1,19 +1,28 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { clearValue, setValue } from '../core/edit';
+import { csv } from '../core/export';
+import { warningFor } from '../core/warnings';
 import type { PresetFile } from '../core/presets';
+import { download } from './download';
+import { Editor, type EditTarget } from './Editor';
 import {
   buildRows,
   columnsFor,
   countDiffers,
+  countWarnings,
+  typeFamilies,
   defaultLabel,
     families,
   filterRows,
   showValue,
+  sliceOf,
   type Cell,
+  type Column,
   type Level,
   type PrinterFamily,
   type Row,
 } from '../core/table';
-import type { Baseline, PresetKind } from '../core/types';
+import type { Baseline, PresetKind, ProfileJson } from '../core/types';
 
 const TABS: { kind: PresetKind; label: string }[] = [
   { kind: 'printer', label: 'Printer' },
@@ -61,19 +70,67 @@ const store = {
 };
 
 /** One value. Long text (G-code, notes) is shown in full, wrapped, up to a few lines unless the row is opened. */
-function ValueCell({ row, cell, open, extra = '', note }: { row: Row; cell: Pick<Cell, 'value'> & Partial<Cell>; open: boolean; extra?: string; note?: string }) {
+function ValueCell({
+  row,
+  cell,
+  open,
+  extra = '',
+  note,
+  edited,
+  onEdit,
+}: {
+  row: Row;
+  cell: Pick<Cell, 'value'> & Partial<Cell>;
+  open: boolean;
+  extra?: string;
+  note?: string;
+  edited?: boolean;
+  onEdit?: () => void;
+}) {
   const v = showValue(row.def, cell.value);
-  const cls = ['v', v.long ? 'txt' : '', cell.differs ? 'dev' : '', cell.own ? 'own' : cell.origin === 'default' ? 'builtin' : '', extra].join(' ');
-  const title = [cell.origin ? sourceText(cell as Cell) : note, v.unknownChoice ? 'Old value: Orca converts or ignores it.' : ''].filter(Boolean).join('\n');
+  const cls = ['v', v.long ? 'txt' : '', cell.differs ? 'dev' : '', cell.own ? 'own' : cell.origin === 'default' ? 'builtin' : '', edited ? 'edited' : '', onEdit ? 'editable' : '', extra].join(' ');
+  const title = [
+    cell.origin ? sourceText(cell as Cell) : note,
+    v.unknownChoice ? 'Old value: Orca converts or ignores it.' : '',
+    cell.warning ? `${cell.warning.level === 'warn' ? 'Warning' : 'Note'}: ${cell.warning.text}` : '',
+    cell.explained ? 'Marked as deliberate: no warning shown.' : '',
+    edited ? 'Changed in SideFin, not exported yet.' : '',
+    onEdit ? 'Click to change.' : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
   return (
-    <td className={cls} title={title}>
+    <td className={cls} title={title} onClick={onEdit} onKeyDown={(e) => e.key === 'Enter' && onEdit?.()} tabIndex={onEdit ? 0 : undefined}>
       {v.long ? <div className={open ? 'full' : 'clamp'}>{v.full}</div> : v.text}
       {v.unknownChoice && <span className="old">old</span>}
+      {cell.warning?.level === 'warn' && (
+        <span className="warnmark" aria-label={`Warning: ${cell.warning.text}`}>
+          !
+        </span>
+      )}
+      {cell.warning?.level === 'hint' && <span className="hintmark" aria-label={`Note: ${cell.warning.text}`} />}
     </td>
   );
 }
 
-export function Viewer({ baseline, presets, printers }: { baseline: Baseline; presets: PresetFile[]; printers?: PrinterFamily }) {
+export function Viewer({
+  baseline,
+  presets,
+  printers,
+  changed,
+  originals,
+  onUpdate,
+}: {
+  baseline: Baseline;
+  presets: PresetFile[];
+  printers?: PrinterFamily;
+  /** Settings changed in SideFin and not exported yet, per preset path. */
+  changed: Record<string, string[]>;
+  /** The presets as read from the folder, by path, before any change. */
+  originals: Record<string, ProfileJson>;
+  onUpdate: (changes: { file: PresetFile; json: ProfileJson }[]) => void;
+}) {
+  const [editing, setEditing] = useState<EditTarget>();
   const allNozzles = useMemo(() => (printers?.printers.map((p) => p.nozzle).filter((n): n is string => !!n) ?? []), [printers]);
   const [hidden, setHidden] = useState<string[]>(() => (store.get('hiddenNozzles') ?? '').split(',').filter(Boolean));
   const toggleNozzle = (n: string) => {
@@ -90,32 +147,67 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
     setOpened(next);
   };
   const [kind, setKind] = useState<PresetKind>('filament');
-  const [picked, setPicked] = useState<Partial<Record<PresetKind, string>>>({});
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [byType, setByType] = useState(store.get('byType') === '1');
+  const [typeNozzle, setTypeNozzle] = useState<string | undefined>(store.get('typeNozzle'));
+  const typeMode = kind === 'filament' && byType;
+  const tNozzle = typeNozzle && allNozzles.includes(typeNozzle) ? typeNozzle : (allNozzles.find((n) => Number(n) === 0.4) ?? allNozzles[0]);
+  const pickKey = typeMode ? `type:${tNozzle}` : kind;
   const [level, setLevel] = useState<Level>('advanced');
   const [onlyDiffers, setOnlyDiffers] = useState(true);
   const [onlyNozzles, setOnlyNozzles] = useState(false);
+  const [onlyWarnings, setOnlyWarnings] = useState(false);
+  // Values you marked as deliberate, per preset and setting; a changed value shows its warning again.
+  const [explained, setExplained] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(store.get('explained') ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const isExplained = useMemo(
+    () => (preset: string, key: string, value: unknown) => explained[`${preset}|${key}`] === JSON.stringify(value),
+    [explained],
+  );
+  /** Mark the values of one setting as deliberate (or not) in every column shown. */
+  const explain = (cols: { name: string; value: unknown }[], key: string, on: boolean) => {
+    const next = { ...explained };
+    for (const { name, value } of cols) {
+      if (on) next[`${name}|${key}`] = JSON.stringify(value);
+      else delete next[`${name}|${key}`];
+    }
+    setExplained(next);
+    store.set('explained', JSON.stringify(next));
+    setEditing(undefined);
+  };
   const [search, setSearch] = useState('');
 
-  const fams = useMemo(() => families(presets, kind, printers), [presets, kind, printers]);
+  const fams = useMemo(
+    () => (typeMode ? typeFamilies(baseline, presets, printers, tNozzle) : families(presets, kind, printers)),
+    [typeMode, baseline, presets, kind, printers, tNozzle],
+  );
+  const visible = (c: { nozzle?: string }) => typeMode || c.nozzle === undefined || !hidden.includes(c.nozzle);
   const counts = useMemo(
     () =>
       Object.fromEntries(
         fams.map((f) => {
           const { columns, dflt } = columnsFor(baseline, f, presets, printers);
-          const shown = columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
-          return [f.name, countDiffers(filterRows(buildRows(baseline, kind, shown, dflt), { level }))];
+          const shown = columns.filter(visible);
+          const r = filterRows(buildRows(baseline, kind, shown, dflt, isExplained), { level });
+          return [f.name, { differs: countDiffers(r), warnings: countWarnings(r, 'warn') }];
         }),
       ),
-    [fams, baseline, presets, printers, kind, level, hidden],
+    [fams, baseline, presets, printers, kind, level, hidden, typeMode, isExplained],
   );
-  const family = fams.find((f) => f.name === picked[kind]) ?? fams[0];
+  const family = fams.find((f) => f.name === picked[pickKey]) ?? fams[0];
   const view = useMemo(() => {
     if (!family) return undefined;
     const all = columnsFor(baseline, family, presets, printers);
-    const columns = all.columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
-    return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt) };
-  }, [family, baseline, presets, printers, kind, hidden]);
-  const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, search }) : [];
+    const columns = all.columns.filter(visible);
+    return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt, isExplained) };
+  }, [family, baseline, presets, printers, kind, hidden, typeMode, isExplained]);
+  const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
+  const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
 
   // Orca repeats short labels such as "First layer" within a group; use the full label there.
   const seen = new Map<string, number>();
@@ -126,6 +218,53 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
     const plate = r.key.match(/^(\w+)_plate_temp/);
     if (plate) return `${PLATES[plate[1]] ?? plate[1]}: ${label.toLowerCase()}`;
     return r.def?.fullLabel || label;
+  };
+
+  const downloadCsv = () => {
+    if (!view || !family) return;
+    const full = (v: Parameters<typeof showValue>[1], def: Row['def']) => {
+      const x = showValue(def, v);
+      return x.full ?? x.text;
+    };
+    const table = [
+      ['Page', 'Group', 'Setting', 'Key', 'Unit', ...view.columns.map((c) => c.name), view.dflt?.name ?? 'Default'],
+      ...rows.map((r) => [r.page, r.group, labelOf(r), r.key, r.def?.unit ?? '', ...r.cells.map((c) => full(c.value, r.def)), full(r.dflt?.value, r.def)]),
+    ];
+    download(`${family.name}.csv`, csv(table), 'text/csv');
+  };
+
+  const saveEdit = (items: string[], all: boolean) => {
+    if (!editing?.column.file || !view) return;
+    const { column, key, def } = editing;
+    const targets = all ? view.columns.filter((c) => c.file) : [column];
+    onUpdate(
+      targets.map((c) => {
+        const shown = c.resolved.values[key]?.value ?? def?.default ?? (def && /s$|Groups$/.test(def.type) ? [] : undefined);
+        // Lists keep their own length per preset (one value per extruder).
+        const own = Array.isArray(shown) && shown.length !== items.length && items.every((x) => x === items[0]) ? shown.map(() => items[0]) : items;
+        return { file: c.file!, json: setValue(c.file!.json, key, own, shown, sliceOf(c, key)) };
+      }),
+    );
+    setEditing(undefined);
+  };
+  /** The value your file holds for a setting, for the printer's extruder type where the file stores one per type. */
+  const inFileValue = (col: Column, key: string) => {
+    const v = col.file ? (originals[col.file.path]?.[key] as ProfileJson[string] | undefined) : undefined;
+    const slice = sliceOf(col, key);
+    if (slice && Array.isArray(v) && v.length === (slice.full as string[]).length) return v.slice(slice.index * slice.width, slice.index * slice.width + slice.width);
+    return v as string | string[] | undefined;
+  };
+  const restore = (col: Column, key: string) => {
+    if (!col.file) return;
+    const original = originals[col.file.path];
+    const json = original && key in original ? { ...col.file.json, [key]: original[key] } : clearValue(col.file.json, key);
+    onUpdate([{ file: col.file, json }]);
+    setEditing(undefined);
+  };
+  const clearEdit = () => {
+    if (!editing?.column.file) return;
+    onUpdate([{ file: editing.column.file, json: clearValue(editing.column.file.json, editing.key) }]);
+    setEditing(undefined);
   };
 
   let lastHead = '';
@@ -147,7 +286,29 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
           ))}
         </div>
         <input className="search" type="search" placeholder="Search settings" value={search} onChange={(e) => setSearch(e.target.value)} />
-        {allNozzles.length > 1 && (
+        {kind === 'filament' && (
+          <div className="seg" role="group" aria-label="Group filaments">
+            <button className={byType ? '' : 'on'} title="One preset at a time, its nozzles side by side" onClick={() => (setByType(false), store.set('byType', '0'))}>
+              By nozzle
+            </button>
+            <button className={byType ? 'on' : ''} title="All filaments of one type side by side, for one nozzle" onClick={() => (setByType(true), store.set('byType', '1'))}>
+              By type
+            </button>
+          </div>
+        )}
+        {typeMode && allNozzles.length > 1 && (
+          <label className="pick">
+            Nozzle{' '}
+            <select value={tNozzle} onChange={(e) => (setTypeNozzle(e.target.value), store.set('typeNozzle', e.target.value))}>
+              {allNozzles.map((n) => (
+                <option key={n} value={n}>
+                  {Number(n).toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!typeMode && allNozzles.length > 1 && (
           <div className="nozzles" role="group" aria-label="Nozzles shown">
             <span className="lbl">Nozzles</span>
             {allNozzles.map((n) => (
@@ -167,10 +328,17 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
           </div>
           {fams.length === 0 && <p className="muted small">None found for this printer.</p>}
           {fams.map((f) => (
-            <button key={f.name} className={`fam${f === family ? ' on' : ''}`} onClick={() => setPicked({ ...picked, [kind]: f.name })}>
+            <button key={f.name} className={`fam${f === family ? ' on' : ''}`} onClick={() => setPicked({ ...picked, [pickKey]: f.name })}>
               <span>{f.name}</span>
-              <span className="cnt" title="Settings that differ from the default">
-                {counts[f.name] || ''}
+              <span className="cnts">
+                {counts[f.name]?.warnings > 0 && (
+                  <span className="wcnt" title="Settings with a warning (line width or temperature)">
+                    !{counts[f.name].warnings}
+                  </span>
+                )}
+                <span className="cnt" title="Settings that differ from the default">
+                  {counts[f.name]?.differs || ''}
+                </span>
               </span>
             </button>
           ))}
@@ -185,7 +353,7 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                   <span className="muted small">
                     compared with <b>{view.dflt.name}</b>
                     {view.columns.length === 0 && ' · none of the chosen nozzles has this preset'}
-                    {view.parents.length > 1 && ` (the nozzles inherit from different presets: ${view.parents.join(', ')})`}
+                    {view.parents.length > 1 && ` (the ${typeMode ? "filaments" : "nozzles"} inherit from different presets: ${view.parents.join(', ')})`}
                   </span>
                 )}
                 <div className="chips">
@@ -194,9 +362,17 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                   </button>
                   {view.columns.length > 1 && (
                     <button className={`chip${onlyNozzles ? ' on' : ''}`} onClick={() => setOnlyNozzles(!onlyNozzles)}>
-                      Only where nozzles differ
+                      {typeMode ? 'Only where filaments differ' : 'Only where nozzles differ'}
                     </button>
                   )}
+                  {(warnCount > 0 || onlyWarnings) && (
+                    <button className={`chip warn${onlyWarnings ? ' on' : ''}`} onClick={() => setOnlyWarnings(!onlyWarnings)}>
+                      Only notes and warnings ({warnCount})
+                    </button>
+                  )}
+                  <button className="chip" title="Download the rows shown here as a CSV file, for a spreadsheet" onClick={downloadCsv}>
+                    Download CSV
+                  </button>
                 </div>
               </div>
 
@@ -258,9 +434,24 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                                 <MoreButton open={opened.has(r.key)} onToggle={() => toggleRow(r.key)} />
                               )}
                             </td>
-                            {r.cells.map((c, i) => (
-                              <ValueCell key={i} row={r} cell={c} open={opened.has(r.key)} />
-                            ))}
+                            {r.cells.map((c, i) => {
+                              const col = view.columns[i];
+                              const edited = !!col.file && changed[col.file.path]?.includes(r.key);
+                              return (
+                                <ValueCell
+                                  key={i}
+                                  row={r}
+                                  cell={c}
+                                  open={opened.has(r.key)}
+                                  edited={edited}
+                                  onEdit={
+                                    col.file && !r.def?.readonly
+                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), others: typeMode ? view.columns.filter((x) => x.file && x !== col).length : 0, warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }), inFile: edited ? { value: inFileValue(col, r.key) } : undefined, onRestore: () => restore(col, r.key), onExplain: (on) => explain(view.columns.map((x, j) => ({ name: x.name, value: r.cells[j].value })).filter((_, j) => (on ? r.cells[j].warning : r.cells[j].explained)), r.key, on) })
+                                      : undefined
+                                  }
+                                />
+                              );
+                            })}
                             <ValueCell
                               row={r}
                               cell={{ value: r.dflt?.value }}
@@ -285,14 +476,21 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                   Nozzles differ
                 </span>
                 <span>
+                  <span className="warnmark">!</span> Likely a mistake: line width vs nozzle, or temperature vs the filament's range
+                </span>
+                <span>
+                  <span className="hintmark" /> Far from the default (click the value to mark it as deliberate)
+                </span>
+                <span>
                   <b>Bold</b>: set in this preset · normal: inherited · <i className="muted">grey italic</i>: Orca's built-in default
                 </span>
-                <span>Hover a value to see where it comes from, or the i to see what a setting does.</span>
+                <span>Hover a value to see where it comes from, or the i to see what a setting does. Click a value of your preset to change it.</span>
               </div>
             </>
           )}
         </main>
       </div>
+      {editing && <Editor key={`${editing.column.name}|${editing.key}`} target={editing} onSave={saveEdit} onClear={clearEdit} onClose={() => setEditing(undefined)} />}
     </div>
   );
 }

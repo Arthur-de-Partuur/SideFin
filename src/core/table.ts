@@ -3,6 +3,7 @@
 
 import { familyOf, isCompatible, nozzleOf, type PresetFile } from './presets';
 import { findSystemProfile, forVariant, resolvePreset, sameValue, type ResolvedPreset, type ResolvedValue } from './resolve';
+import { warningFor, type Warning } from './warnings';
 import type { Baseline, OrcaValue, PresetKind, ProfileJson, SettingDef, SettingMode } from './types';
 
 export interface PrinterEntry {
@@ -19,7 +20,7 @@ export interface PrinterFamily {
 export interface Family {
   kind: PresetKind;
   name: string;
-  members: { nozzle?: string; file: PresetFile }[];
+  members: { nozzle?: string; file: PresetFile; label?: string }[];
 }
 
 export interface Column {
@@ -27,11 +28,20 @@ export interface Column {
   nozzle?: string;
   name: string;
   resolved: ResolvedPreset;
+  /** The values before picking the printer's extruder variant, and which variant that is. */
+  full?: ResolvedPreset;
+  variantIndex?: number;
+  /** The user preset file this column shows. */
+  file?: PresetFile;
 }
 
 export interface Cell extends ResolvedValue {
   /** Differs from the printer maker's default. */
   differs: boolean;
+  /** Why the value looks odd, if it does and you have not marked it as explained. */
+  warning?: Warning;
+  /** You marked this value as explained, so its warning is not shown. */
+  explained?: boolean;
 }
 
 export interface Row {
@@ -102,6 +112,12 @@ export function nozzleLabel(nozzle?: string): string {
   return nozzle === undefined ? 'All nozzles' : `${Number(nozzle).toFixed(2)} nozzle`;
 }
 
+const VARIANT_LIST: Record<PresetKind, string> = {
+  process: 'print_extruder_variant',
+  filament: 'filament_extruder_variant',
+  printer: 'printer_extruder_variant',
+};
+
 /** Vendor folder names as people write them. */
 const MAKERS: Record<string, string> = { Ratrig: 'RatRig', OrcaFilamentLibrary: 'Orca library' };
 
@@ -123,12 +139,21 @@ export function columnsFor(
     const v = variantOf(printers, nozzle);
     return v ? forVariant(r, baseline, v) : r;
   };
-  const columns = family.members.map((m) => ({
-    label: nozzleLabel(m.nozzle),
-    nozzle: m.nozzle,
-    name: m.file.json.name,
-    resolved: withVariant(resolvePreset(baseline, family.kind, m.file.json, users), m.nozzle),
-  }));
+  const columns = family.members.map((m) => {
+    const full = resolvePreset(baseline, family.kind, m.file.json, users);
+    const v = variantOf(printers, m.nozzle);
+    const list = full.values[VARIANT_LIST[family.kind]]?.value;
+    const index = v && Array.isArray(list) ? list.indexOf(v) : -1;
+    return {
+      label: m.label ?? nozzleLabel(m.nozzle),
+      nozzle: m.nozzle,
+      name: m.file.json.name,
+      resolved: withVariant(full, m.nozzle),
+      full,
+      variantIndex: index >= 0 ? index : undefined,
+      file: m.file,
+    };
+  });
   const parents = [...new Set(columns.map((c) => c.resolved.chain.find((l) => l.origin === 'system')?.name).filter((x): x is string => !!x))];
   let dflt: Column | undefined;
   const first = columns[0]?.resolved.chain.find((l) => l.origin === 'system');
@@ -149,17 +174,23 @@ export function columnsFor(
 /** Keys that name the preset itself; they always differ and say nothing. */
 const SKIP = /^(inherits|print_settings_id|filament_settings_id|printer_settings_id|version)$/;
 
-export function buildRows(baseline: Baseline, kind: PresetKind, columns: Column[], dflt?: Column): Row[] {
+/** Whether you marked a value of a preset as explained (deliberate). */
+export type IsExplained = (preset: string, key: string, value: OrcaValue | undefined) => boolean;
+
+export function buildRows(baseline: Baseline, kind: PresetKind, columns: Column[], dflt?: Column, isExplained?: IsExplained): Row[] {
   const keys = new Set(baseline.presetKeys[kind]);
   for (const c of columns) for (const k of Object.keys(c.resolved.values)) keys.add(k);
   const rows: (Row & { order: number })[] = [];
+  const valueMaps = columns.map((c) => Object.fromEntries(Object.entries(c.resolved.values).map(([k, v]) => [k, v.value])));
   for (const key of keys) {
     if (SKIP.test(key)) continue;
     const def = baseline.settings[key];
     const d = dflt?.resolved.values[key];
-    const cells = columns.map((c) => {
+    const cells = columns.map((c, i) => {
       const v = c.resolved.values[key] ?? { value: def?.default, from: 'default', origin: 'default' as const, own: false };
-      return { ...v, differs: d ? !sameValue(v.value, d.value) : false };
+      const warning = warningFor(key, def, v.value, d?.value, { nozzle: c.nozzle, values: valueMaps[i] });
+      const explained = !!warning && !!isExplained?.(c.name, key, v.value);
+      return { ...v, differs: d ? !sameValue(v.value, d.value) : false, ...(warning && !explained ? { warning } : {}), ...(explained ? { explained } : {}) };
     });
     const nozzlesDiffer = cells.some((c) => !sameValue(c.value, cells[0].value));
     const ui = def?.ui && def.ui.tab === kind ? def.ui : undefined;
@@ -188,6 +219,7 @@ export interface RowFilter {
   level: Level;
   onlyDiffers?: boolean;
   onlyNozzlesDiffer?: boolean;
+  onlyWarnings?: boolean;
   search?: string;
 }
 
@@ -200,6 +232,7 @@ export function filterRows(rows: Row[], f: RowFilter): Row[] {
     }
     if (f.onlyDiffers && !r.cells.some((c) => c.differs)) return false;
     if (f.onlyNozzlesDiffer && !r.nozzlesDiffer) return false;
+    if (f.onlyWarnings && !r.cells.some((c) => c.warning)) return false;
     if (q) {
       const text = `${r.key} ${r.def?.label ?? ''} ${r.def?.fullLabel ?? ''} ${r.page} ${r.group}`.toLowerCase();
       if (!text.includes(q)) return false;
@@ -247,4 +280,40 @@ export function showValue(def: SettingDef | undefined, value: OrcaValue | undefi
   const short = firstLine.length > 60 ? `${firstLine.slice(0, 57)}…` : firstLine;
   const text = short !== full && !short.endsWith('…') ? `${short} …` : short;
   return { text: text || (full ? '…' : ''), full: text !== full ? full : undefined, unknownChoice, long: text !== full };
+}
+
+/**
+ * Where a shown value sits in the stored list, for settings that store one
+ * value per extruder variant. Undefined when the value is stored as shown.
+ */
+export function sliceOf(col: Column, key: string): { full: OrcaValue | undefined; index: number; width: number } | undefined {
+  const shown = col.resolved.values[key]?.value;
+  const full = col.full?.values[key]?.value;
+  if (col.variantIndex === undefined || !Array.isArray(shown) || !Array.isArray(full)) return undefined;
+  if (full.length === shown.length || full.length % shown.length !== 0) return undefined;
+  return { full, index: col.variantIndex, width: shown.length };
+}
+
+/** Number of settings with a warning in at least one nozzle; with a level, only warnings of that level. */
+export function countWarnings(rows: Row[], level?: Warning['level']): number {
+  return rows.filter((r) => r.cells.some((c) => c.warning && (!level || c.warning.level === level))).length;
+}
+
+/**
+ * Filament presets grouped by filament type (PLA, PETG, ...) for one nozzle:
+ * one column per filament. Presets that fit any nozzle are included.
+ */
+export function typeFamilies(baseline: Baseline, presets: PresetFile[], printers: PrinterFamily | undefined, nozzle: string | undefined): Family[] {
+  const users = userMap(presets, 'filament');
+  const map = new Map<string, Family['members']>();
+  for (const f of families(presets, 'filament', printers)) {
+    const m = f.members.find((x) => x.nozzle === nozzle) ?? f.members.find((x) => x.nozzle === undefined);
+    if (!m) continue;
+    const t = resolvePreset(baseline, 'filament', m.file.json, users).values.filament_type?.value;
+    const type = (Array.isArray(t) ? t[0] : t) || 'Unknown type';
+    map.set(type, [...(map.get(type) ?? []), { ...m, label: f.name }]);
+  }
+  return [...map.entries()]
+    .map(([name, members]) => ({ kind: 'filament' as const, name, members: members.sort((a, b) => a.label!.localeCompare(b.label!)) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

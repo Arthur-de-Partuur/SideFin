@@ -11,7 +11,8 @@ Your profiles stay on your computer. The app reads them in your browser and neve
 ## Status
 
 Version 0.2 is the viewer: choose your Orca data folder and compare your
-presets per nozzle with the printer maker's default. It works best in Chrome or Edge. See [docs/PURPOSE.md](docs/PURPOSE.md) for the goals and the release plan,
+presets per nozzle with the printer maker's default. Version 0.3 adds changing
+values (with checks and warnings) and exporting the presets as Orca files. It works best in Chrome or Edge. See [docs/PURPOSE.md](docs/PURPOSE.md) for the goals and the release plan,
 and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## For developers
