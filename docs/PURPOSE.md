@@ -45,8 +45,12 @@ compare two presets.
 |---|---|---|---|
 | 1 | 0.1 | Foundation: defaults builder, core resolver, tests, website | G1, G2 |
 | 2 | 0.2 | Viewer: three tabs, nozzle columns, printer maker's default, source, levels, search | G1, G2, G3, G6 |
-| 3 | 0.3 | Edit and export, value checks, backup, undo, CSV | G4 |
+| 3 | 0.3 | Edit and export, value checks, backup, undo, CSV; cleanup that drops obsolete settings on export | G4 |
 | 4 | 0.4 | Manufacturer advice, calibration placeholders | G7 |
-| 5 | 0.5 | Orca update changes | G5 |
+| 5 | 0.5 | Orca update changes; per setting the Orca version it first appeared in, and obsolete settings marked | G5 |
 | 6 | 0.6 | Calibration working | G7, G8 |
 | 7 | 1.0 | Save directly into the Orca data folder, with backup | G4 |
+
+## Parked ideas (no goal yet)
+
+1. Open an Orca project (.3mf) and show which settings it overrides on top of the saved presets. Found on 24 Nov 2026: a project changed 7 process settings (walls, brim, supports, first layer speeds) that the presets do not show.

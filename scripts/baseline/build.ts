@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { join, resolve } from 'node:path';
 import type { Baseline, BaselineIndex, PresetKind, ProfileJson } from '../../src/core/types';
 import { parsePrintConfig, readConstants } from './parsePrintConfig';
-import { parsePresetKeys } from './parsePreset';
+import { parsePresetKeys, parseVariantKeys } from './parsePreset';
 import { parseTab } from './parseTab';
 
 const REPO = 'https://github.com/OrcaSlicer/OrcaSlicer';
@@ -112,7 +112,10 @@ export function buildBaseline(srcDir: string, tag: string, commit?: string): Bas
     presetKeys[kind] = presetKeys[kind].filter((k) => k in settings);
   }
   const ui = parseTab(read('src/slic3r/GUI/Tab.cpp'), new Set(Object.keys(settings)));
-  for (const [key, place] of Object.entries(ui)) settings[key].ui = place;
+  for (const [key, { lineLabel, ...place }] of Object.entries(ui)) {
+    settings[key].ui = place;
+    if (!settings[key].label && lineLabel) settings[key].label = lineLabel;
+  }
 
   const profiles: Baseline['profiles'] = { printer: {}, filament: {}, process: {} };
   const skipped: string[] = [];
@@ -127,6 +130,7 @@ export function buildBaseline(srcDir: string, tag: string, commit?: string): Bas
     generatedAt: new Date().toISOString(),
     settings,
     presetKeys,
+    variantKeys: parseVariantKeys(printConfig),
     profiles,
     report: {
       settings: all.length,

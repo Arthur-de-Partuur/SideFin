@@ -5,6 +5,9 @@
 1. **The app** (`src/`): a React web page built with Vite. It runs in the
    browser and reads your Orca data folder on your own computer (G6).
    - `src/core/`: logic without any screen code. Every rule here has a test next to it (`*.test.ts`).
+     - `resolve.ts`: the value in effect of each setting and where it comes from.
+     - `presets.ts`: finds presets in the chosen folder and groups them per nozzle.
+     - `table.ts`: the rows and columns the viewer shows.
    - `src/ui/`: the screens.
 2. **The defaults builder** (`scripts/baseline/`): reads OrcaSlicer's source for
    one release and writes `public/baseline/<version>.json`. That file holds:

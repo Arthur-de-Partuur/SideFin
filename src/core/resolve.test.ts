@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { baseline } from './fixtures/baseline';
-import { differences, findSystemProfile, resolvePreset, sameValue } from './resolve';
+import { differences, findSystemProfile, forVariant, resolvePreset, sameValue } from './resolve';
 
 describe('resolvePreset', () => {
   it('takes each value from the nearest profile in the chain, then the built-in default', () => {
@@ -50,6 +50,7 @@ describe('sameValue', () => {
     expect(sameValue(['0.4'], '0.4')).toBe(true);
     expect(sameValue('50%', '50')).toBe(false);
     expect(sameValue(['0.4', '0.6'], ['0.4'])).toBe(false);
+    expect(sameValue(['100', '100'], ['100'])).toBe(true);
     expect(sameValue('', '0')).toBe(false);
     expect(sameValue(undefined, undefined)).toBe(true);
   });
@@ -60,5 +61,22 @@ describe('differences', () => {
     const a = resolvePreset(baseline, 'process', { name: 'A', inherits: '0.20mm Standard @Acme', layer_height: '0.20' });
     const b = resolvePreset(baseline, 'process', { name: 'B', inherits: '0.20mm Standard @Acme', wall_loops: '3' });
     expect(differences(a, b)).toEqual(['wall_loops']);
+  });
+});
+
+describe('forVariant', () => {
+  it('keeps the value of the chosen extruder variant', () => {
+    const r = resolvePreset(baseline, 'filament', {
+      name: 'My TPU',
+      inherits: 'Generic PETG @System',
+      filament_extruder_variant: ['Direct Drive Standard', 'Bowden Standard'],
+      pressure_advance: ['0.021', '0.4'],
+      filament_type: ['FLEX'],
+    });
+    const v = forVariant(r, baseline, 'Bowden Standard');
+    expect(v.values.pressure_advance.value).toEqual(['0.4']);
+    expect(v.values.filament_extruder_variant.value).toEqual(['Bowden Standard']);
+    expect(v.values.filament_type.value).toEqual(['FLEX']);
+    expect(forVariant(r, baseline, 'Unknown')).toBe(r);
   });
 });

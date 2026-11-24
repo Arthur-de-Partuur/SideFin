@@ -10,8 +10,8 @@ Your profiles stay on your computer. The app reads them in your browser and neve
 
 ## Status
 
-Version 0.1 is the foundation: SideFin can read Orca's own defaults for each
-release. The viewer comes in 0.2. See [docs/PURPOSE.md](docs/PURPOSE.md) for the goals and the release plan,
+Version 0.2 is the viewer: choose your Orca data folder and compare your
+presets per nozzle with the printer maker's default. It works best in Chrome or Edge. See [docs/PURPOSE.md](docs/PURPOSE.md) for the goals and the release plan,
 and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## For developers

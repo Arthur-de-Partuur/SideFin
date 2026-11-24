@@ -21,6 +21,7 @@ export const baseline: Baseline = {
     filament: ['pressure_advance', 'filament_type'],
     printer: ['nozzle_diameter', 'retraction_length'],
   },
+  variantKeys: { process: [], filament: ['pressure_advance'], printer: [], printerPairs: [] },
   profiles: {
     process: {
       'Acme/fdm_process_common': { name: 'fdm_process_common', vendor: 'Acme', layer_height: '0.2', wall_loops: '3' },

@@ -9,6 +9,8 @@ export interface UiPlace {
   page: string;
   group: string;
   order: number;
+  /** Label of the Orca line the field sits on, for settings without a label of their own. */
+  lineLabel?: string;
 }
 
 /** Functions that build the settings pages, and the tab they belong to. */
@@ -24,6 +26,7 @@ const BUILDERS: Record<string, PresetKind> = {
 const CALL = /append_single_option_line|append_option_line|get_option\s*\(|append_option\s*\(|create_single_option_line/;
 const PAGE = /add_options_page\(\s*(L\("(?:[^"\\]|\\.)*"\)|page_name)/;
 const GROUP = /new_optgroup\(\s*(L\("(?:[^"\\]|\\.)*"\)|"(?:[^"\\]|\\.)*")/;
+const LINE = /\bLine\s+\w+\s*=\s*(?:Line\s*)?\{\s*(L\("(?:[^"\\]|\\.)*"\))/;
 const VECTOR = /std::vector\s*<\s*std::string\s*>\s*\w+\s*[{=]/;
 
 export function parseTab(source: string, knownKeys: Set<string>): Record<string, UiPlace> {
@@ -39,14 +42,22 @@ export function parseTab(source: string, knownKeys: Set<string>): Record<string,
     target[key] = { tab, page, group, order: order++ };
   };
 
-  starts.forEach((fn, i) => {
-    const tab = BUILDERS[fn.name];
-    if (!tab) return;
-    const body = src.slice(fn.index, i + 1 < starts.length ? starts[i + 1].index : undefined);
+  // Walk the builders in the order of BUILDERS: Orca shows the Filament page
+  // before the Setting Overrides page, whatever the order in the source file.
+  const builderOrder = Object.keys(BUILDERS);
+  const bodies = starts
+    .map((fn, i) => ({ name: fn.name, body: src.slice(fn.index, i + 1 < starts.length ? starts[i + 1].index : undefined) }))
+    .filter((f) => f.name in BUILDERS)
+    .sort((x, y) => builderOrder.indexOf(x.name) - builderOrder.indexOf(y.name));
+
+  bodies.forEach(({ name, body }) => {
+    const tab = BUILDERS[name];
     let page = '';
     let group = '';
     let pending: string[] = []; // keys listed in a vector, shown in the next group
     let inVector = false;
+    let lineLabel: string | undefined; // label of a multi-field Line, given to its first field
+
 
     for (const line of body.split('\n')) {
       const p = line.match(PAGE);
@@ -60,6 +71,9 @@ export function parseTab(source: string, knownKeys: Set<string>): Record<string,
         for (const k of pending) place(maybe, k, tab, page, group);
         pending = [];
       }
+      const l = line.match(LINE);
+      if (l) lineLabel = readStringExpr(l[1]);
+      if (/append_line\s*\(/.test(line)) lineLabel = undefined;
       const keys = [...line.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]);
       if (VECTOR.test(line)) inVector = true;
       if (inVector) {
@@ -68,7 +82,14 @@ export function parseTab(source: string, knownKeys: Set<string>): Record<string,
         continue;
       }
       if (CALL.test(line)) {
-        for (const k of keys) if (knownKeys.has(k)) place(sure, k, tab, page, group);
+        for (const k of keys) {
+          if (!knownKeys.has(k)) continue;
+          place(sure, k, tab, page, group);
+          if (lineLabel && sure[k] && !sure[k].lineLabel) {
+            sure[k].lineLabel = lineLabel;
+            lineLabel = undefined;
+          }
+        }
         // "machine_max_acceleration_" + axis  ->  _x, _y, _z, _e
         for (const m of line.matchAll(/"([a-z0-9_]+_)"\s*\+\s*\w+/g)) {
           for (const k of knownKeys) if (k.startsWith(m[1]) && /^[xyze]$/.test(k.slice(m[1].length))) place(sure, k, tab, page, group);
