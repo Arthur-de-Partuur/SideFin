@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collectPresets, type PresetFile } from '../core/presets';
+import { changedKeys } from '../core/edit';
 import { printerFamilies } from '../core/table';
-import type { Baseline, BaselineIndex } from '../core/types';
+import type { Baseline, BaselineIndex, ProfileJson } from '../core/types';
 import { isNewer, onlineVersion } from '../core/update';
 import { allowRead, canPickFolder, readFileList, readFolder, rememberedFolder, rememberFolder, type FolderFile } from './folder';
+import { backup, Changes } from './Changes';
 import { Logo } from './Logo';
 import { Viewer } from './Viewer';
 
@@ -32,7 +34,13 @@ interface Loaded {
   folder: string;
   presets: PresetFile[];
   skipped: string[];
+  /** The preset files as read, for the backup. */
+  files: FolderFile[];
 }
+
+/** Changes not exported yet, per preset path; kept in the browser so a reload does not lose them. */
+type Edits = Record<string, ProfileJson>;
+const editsKey = (folder: string) => `edits.${folder}`;
 
 export function App() {
   const [index, setIndex] = useState<BaselineIndex>();
@@ -45,6 +53,13 @@ export function App() {
   const [printerName, setPrinterName] = useState<string | undefined>(store.get('printer'));
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [edits, setEdits] = useState<Edits>({});
+  const [history, setHistory] = useState<Edits[]>([]);
+
+  const keepEdits = (next: Edits, folder = loaded?.folder) => {
+    setEdits(next);
+    if (folder) store.set(editsKey(folder), JSON.stringify(next));
+  };
 
   useEffect(() => {
     fetch(`${BASE}baseline/index.json`)
@@ -80,7 +95,17 @@ export function App() {
 
   const load = (folder: string, files: FolderFile[]) => {
     const { presets, skipped } = collectPresets(files);
-    setLoaded({ folder, presets, skipped });
+    const paths = new Set(presets.map((p) => p.path));
+    setLoaded({ folder, presets, skipped, files: files.filter((f) => paths.has(f.path.replace(/\\/g, '/'))) });
+    let saved: Edits = {};
+    try {
+      saved = JSON.parse(store.get(editsKey(folder)) ?? '{}');
+    } catch {
+      saved = {};
+    }
+    // Keep only changes to presets that are still there.
+    keepEdits(Object.fromEntries(Object.entries(saved).filter(([p]) => paths.has(p))), folder);
+    setHistory([]);
   };
 
   const run = async (job: () => Promise<void>) => {
@@ -113,7 +138,29 @@ export function App() {
       load(remembered.name, await readFolder(remembered));
     });
 
-  const printers = useMemo(() => (baseline && loaded ? printerFamilies(baseline, loaded.presets) : []), [baseline, loaded]);
+  const presets = useMemo(() => loaded?.presets.map((p) => (edits[p.path] ? { ...p, json: edits[p.path] } : p)) ?? [], [loaded, edits]);
+  const changed = useMemo(
+    () => Object.fromEntries((loaded?.presets ?? []).filter((p) => edits[p.path]).map((p) => [p.path, changedKeys(p.json, edits[p.path])])),
+    [loaded, edits],
+  );
+  const update = (file: PresetFile, json: ProfileJson) => {
+    setHistory([...history, edits]);
+    const original = loaded?.presets.find((p) => p.path === file.path)?.json;
+    const next = { ...edits, [file.path]: json };
+    if (original && changedKeys(original, json).length === 0) delete next[file.path];
+    keepEdits(next);
+  };
+  const undo = () => {
+    if (!history.length) return;
+    keepEdits(history[history.length - 1]);
+    setHistory(history.slice(0, -1));
+  };
+  const discard = () => {
+    setHistory([...history, edits]);
+    keepEdits({});
+  };
+
+  const printers = useMemo(() => (baseline && loaded ? printerFamilies(baseline, presets) : []), [baseline, loaded, presets]);
   const printer = printers.find((p) => p.name === printerName) ?? printers[0];
 
   return (
@@ -162,6 +209,11 @@ export function App() {
               ))}
             </select>
           </label>
+        )}
+        {loaded && (
+          <button className="ghost" onClick={() => backup(loaded.files, loaded.folder)} title="Download all your presets, as they are in the folder, as a zip">
+            Backup
+          </button>
         )}
         {loaded && (
           <button className="ghost" onClick={pick} disabled={busy} title={`Reading: ${loaded.folder}`}>
@@ -221,7 +273,12 @@ export function App() {
       )}
 
       {loaded && loaded.presets.length > 0 && !baseline && <p className="muted">Loading Orca {orca} defaults…</p>}
-      {loaded && baseline && loaded.presets.length > 0 && <Viewer baseline={baseline} presets={loaded.presets} printers={printer} />}
+      {loaded && baseline && (
+        <Changes baseline={baseline} originals={loaded.presets} current={edits} canUndo={history.length > 0} onUndo={undo} onDiscard={discard} />
+      )}
+      {loaded && baseline && loaded.presets.length > 0 && (
+        <Viewer baseline={baseline} presets={presets} printers={printer} changed={changed} onUpdate={update} />
+      )}
 
       <footer>
         <span>SideFin {__APP_VERSION__}</span>

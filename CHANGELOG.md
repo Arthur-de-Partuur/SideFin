@@ -2,6 +2,16 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.3.0 (in progress)
+
+- Click a value of your preset to change it: a number field, yes/no, a list of choices or a text box for G-code. Each change can be undone, and "Back to inherited" removes the preset's own value. (G4)
+- A value of the wrong type or outside Orca's own limits is refused, with the reason. (G4)
+- Settings with one value per extruder type (Orca 2.4 and later) change only for the printer's extruder type. (G4)
+- Changes are kept in the browser until you export them, also after a reload. Changed values are marked. (G4)
+- Export: the changed presets as Orca JSON files, one file or a zip with the folders. Settings your Orca version no longer knows can be removed on export, also from unchanged presets. (G4)
+- Backup: download all your presets, exactly as read, as a zip. (G6)
+- Download the table as CSV. (G1)
+
 ## 0.2.0 (2026-11-24)
 
 Feedback round 1 (0.2.0-dev.2):

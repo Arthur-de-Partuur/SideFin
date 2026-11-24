@@ -1,5 +1,9 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { clearValue, setValue } from '../core/edit';
+import { csv } from '../core/export';
 import type { PresetFile } from '../core/presets';
+import { download } from './download';
+import { Editor, type EditTarget } from './Editor';
 import {
   buildRows,
   columnsFor,
@@ -8,12 +12,13 @@ import {
     families,
   filterRows,
   showValue,
+  sliceOf,
   type Cell,
   type Level,
   type PrinterFamily,
   type Row,
 } from '../core/table';
-import type { Baseline, PresetKind } from '../core/types';
+import type { Baseline, PresetKind, ProfileJson } from '../core/types';
 
 const TABS: { kind: PresetKind; label: string }[] = [
   { kind: 'printer', label: 'Printer' },
@@ -61,19 +66,56 @@ const store = {
 };
 
 /** One value. Long text (G-code, notes) is shown in full, wrapped, up to a few lines unless the row is opened. */
-function ValueCell({ row, cell, open, extra = '', note }: { row: Row; cell: Pick<Cell, 'value'> & Partial<Cell>; open: boolean; extra?: string; note?: string }) {
+function ValueCell({
+  row,
+  cell,
+  open,
+  extra = '',
+  note,
+  edited,
+  onEdit,
+}: {
+  row: Row;
+  cell: Pick<Cell, 'value'> & Partial<Cell>;
+  open: boolean;
+  extra?: string;
+  note?: string;
+  edited?: boolean;
+  onEdit?: () => void;
+}) {
   const v = showValue(row.def, cell.value);
-  const cls = ['v', v.long ? 'txt' : '', cell.differs ? 'dev' : '', cell.own ? 'own' : cell.origin === 'default' ? 'builtin' : '', extra].join(' ');
-  const title = [cell.origin ? sourceText(cell as Cell) : note, v.unknownChoice ? 'Old value: Orca converts or ignores it.' : ''].filter(Boolean).join('\n');
+  const cls = ['v', v.long ? 'txt' : '', cell.differs ? 'dev' : '', cell.own ? 'own' : cell.origin === 'default' ? 'builtin' : '', edited ? 'edited' : '', onEdit ? 'editable' : '', extra].join(' ');
+  const title = [
+    cell.origin ? sourceText(cell as Cell) : note,
+    v.unknownChoice ? 'Old value: Orca converts or ignores it.' : '',
+    edited ? 'Changed in SideFin, not exported yet.' : '',
+    onEdit ? 'Click to change.' : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
   return (
-    <td className={cls} title={title}>
+    <td className={cls} title={title} onClick={onEdit} onKeyDown={(e) => e.key === 'Enter' && onEdit?.()} tabIndex={onEdit ? 0 : undefined}>
       {v.long ? <div className={open ? 'full' : 'clamp'}>{v.full}</div> : v.text}
       {v.unknownChoice && <span className="old">old</span>}
     </td>
   );
 }
 
-export function Viewer({ baseline, presets, printers }: { baseline: Baseline; presets: PresetFile[]; printers?: PrinterFamily }) {
+export function Viewer({
+  baseline,
+  presets,
+  printers,
+  changed,
+  onUpdate,
+}: {
+  baseline: Baseline;
+  presets: PresetFile[];
+  printers?: PrinterFamily;
+  /** Settings changed in SideFin and not exported yet, per preset path. */
+  changed: Record<string, string[]>;
+  onUpdate: (file: PresetFile, json: ProfileJson) => void;
+}) {
+  const [editing, setEditing] = useState<EditTarget>();
   const allNozzles = useMemo(() => (printers?.printers.map((p) => p.nozzle).filter((n): n is string => !!n) ?? []), [printers]);
   const [hidden, setHidden] = useState<string[]>(() => (store.get('hiddenNozzles') ?? '').split(',').filter(Boolean));
   const toggleNozzle = (n: string) => {
@@ -126,6 +168,32 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
     const plate = r.key.match(/^(\w+)_plate_temp/);
     if (plate) return `${PLATES[plate[1]] ?? plate[1]}: ${label.toLowerCase()}`;
     return r.def?.fullLabel || label;
+  };
+
+  const downloadCsv = () => {
+    if (!view || !family) return;
+    const full = (v: Parameters<typeof showValue>[1], def: Row['def']) => {
+      const x = showValue(def, v);
+      return x.full ?? x.text;
+    };
+    const table = [
+      ['Page', 'Group', 'Setting', 'Key', 'Unit', ...view.columns.map((c) => c.name), view.dflt?.name ?? 'Default'],
+      ...rows.map((r) => [r.page, r.group, labelOf(r), r.key, r.def?.unit ?? '', ...r.cells.map((c) => full(c.value, r.def)), full(r.dflt?.value, r.def)]),
+    ];
+    download(`${family.name}.csv`, csv(table), 'text/csv');
+  };
+
+  const saveEdit = (items: string[]) => {
+    if (!editing?.column.file) return;
+    const { column, key, def, cell } = editing;
+    const shown = cell.value ?? (def && /s$|Groups$/.test(def.type) ? [] : undefined);
+    onUpdate(column.file!, setValue(column.file!.json, key, items, shown, sliceOf(column, key)));
+    setEditing(undefined);
+  };
+  const clearEdit = () => {
+    if (!editing?.column.file) return;
+    onUpdate(editing.column.file, clearValue(editing.column.file.json, editing.key));
+    setEditing(undefined);
   };
 
   let lastHead = '';
@@ -197,6 +265,9 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                       Only where nozzles differ
                     </button>
                   )}
+                  <button className="chip" title="Download the rows shown here as a CSV file, for a spreadsheet" onClick={downloadCsv}>
+                    Download CSV
+                  </button>
                 </div>
               </div>
 
@@ -258,9 +329,24 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
                                 <MoreButton open={opened.has(r.key)} onToggle={() => toggleRow(r.key)} />
                               )}
                             </td>
-                            {r.cells.map((c, i) => (
-                              <ValueCell key={i} row={r} cell={c} open={opened.has(r.key)} />
-                            ))}
+                            {r.cells.map((c, i) => {
+                              const col = view.columns[i];
+                              const edited = !!col.file && changed[col.file.path]?.includes(r.key);
+                              return (
+                                <ValueCell
+                                  key={i}
+                                  row={r}
+                                  cell={c}
+                                  open={opened.has(r.key)}
+                                  edited={edited}
+                                  onEdit={
+                                    col.file && !r.def?.readonly
+                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key) })
+                                      : undefined
+                                  }
+                                />
+                              );
+                            })}
                             <ValueCell
                               row={r}
                               cell={{ value: r.dflt?.value }}
@@ -293,6 +379,7 @@ export function Viewer({ baseline, presets, printers }: { baseline: Baseline; pr
           )}
         </main>
       </div>
+      {editing && <Editor key={`${editing.column.name}|${editing.key}`} target={editing} onSave={saveEdit} onClear={clearEdit} onClose={() => setEditing(undefined)} />}
     </div>
   );
 }

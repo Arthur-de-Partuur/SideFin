@@ -27,6 +27,11 @@ export interface Column {
   nozzle?: string;
   name: string;
   resolved: ResolvedPreset;
+  /** The values before picking the printer's extruder variant, and which variant that is. */
+  full?: ResolvedPreset;
+  variantIndex?: number;
+  /** The user preset file this column shows. */
+  file?: PresetFile;
 }
 
 export interface Cell extends ResolvedValue {
@@ -102,6 +107,12 @@ export function nozzleLabel(nozzle?: string): string {
   return nozzle === undefined ? 'All nozzles' : `${Number(nozzle).toFixed(2)} nozzle`;
 }
 
+const VARIANT_LIST: Record<PresetKind, string> = {
+  process: 'print_extruder_variant',
+  filament: 'filament_extruder_variant',
+  printer: 'printer_extruder_variant',
+};
+
 /** Vendor folder names as people write them. */
 const MAKERS: Record<string, string> = { Ratrig: 'RatRig', OrcaFilamentLibrary: 'Orca library' };
 
@@ -123,12 +134,21 @@ export function columnsFor(
     const v = variantOf(printers, nozzle);
     return v ? forVariant(r, baseline, v) : r;
   };
-  const columns = family.members.map((m) => ({
-    label: nozzleLabel(m.nozzle),
-    nozzle: m.nozzle,
-    name: m.file.json.name,
-    resolved: withVariant(resolvePreset(baseline, family.kind, m.file.json, users), m.nozzle),
-  }));
+  const columns = family.members.map((m) => {
+    const full = resolvePreset(baseline, family.kind, m.file.json, users);
+    const v = variantOf(printers, m.nozzle);
+    const list = full.values[VARIANT_LIST[family.kind]]?.value;
+    const index = v && Array.isArray(list) ? list.indexOf(v) : -1;
+    return {
+      label: nozzleLabel(m.nozzle),
+      nozzle: m.nozzle,
+      name: m.file.json.name,
+      resolved: withVariant(full, m.nozzle),
+      full,
+      variantIndex: index >= 0 ? index : undefined,
+      file: m.file,
+    };
+  });
   const parents = [...new Set(columns.map((c) => c.resolved.chain.find((l) => l.origin === 'system')?.name).filter((x): x is string => !!x))];
   let dflt: Column | undefined;
   const first = columns[0]?.resolved.chain.find((l) => l.origin === 'system');
@@ -247,4 +267,16 @@ export function showValue(def: SettingDef | undefined, value: OrcaValue | undefi
   const short = firstLine.length > 60 ? `${firstLine.slice(0, 57)}…` : firstLine;
   const text = short !== full && !short.endsWith('…') ? `${short} …` : short;
   return { text: text || (full ? '…' : ''), full: text !== full ? full : undefined, unknownChoice, long: text !== full };
+}
+
+/**
+ * Where a shown value sits in the stored list, for settings that store one
+ * value per extruder variant. Undefined when the value is stored as shown.
+ */
+export function sliceOf(col: Column, key: string): { full: OrcaValue | undefined; index: number; width: number } | undefined {
+  const shown = col.resolved.values[key]?.value;
+  const full = col.full?.values[key]?.value;
+  if (col.variantIndex === undefined || !Array.isArray(shown) || !Array.isArray(full)) return undefined;
+  if (full.length === shown.length || full.length % shown.length !== 0) return undefined;
+  return { full, index: col.variantIndex, width: shown.length };
 }
