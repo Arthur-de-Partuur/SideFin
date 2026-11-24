@@ -3,6 +3,7 @@
 
 import { familyOf, isCompatible, nozzleOf, type PresetFile } from './presets';
 import { findSystemProfile, forVariant, resolvePreset, sameValue, type ResolvedPreset, type ResolvedValue } from './resolve';
+import { warningFor } from './warnings';
 import type { Baseline, OrcaValue, PresetKind, ProfileJson, SettingDef, SettingMode } from './types';
 
 export interface PrinterEntry {
@@ -37,6 +38,8 @@ export interface Column {
 export interface Cell extends ResolvedValue {
   /** Differs from the printer maker's default. */
   differs: boolean;
+  /** Why the value looks odd, if it does. */
+  warning?: string;
 }
 
 export interface Row {
@@ -173,13 +176,15 @@ export function buildRows(baseline: Baseline, kind: PresetKind, columns: Column[
   const keys = new Set(baseline.presetKeys[kind]);
   for (const c of columns) for (const k of Object.keys(c.resolved.values)) keys.add(k);
   const rows: (Row & { order: number })[] = [];
+  const valueMaps = columns.map((c) => Object.fromEntries(Object.entries(c.resolved.values).map(([k, v]) => [k, v.value])));
   for (const key of keys) {
     if (SKIP.test(key)) continue;
     const def = baseline.settings[key];
     const d = dflt?.resolved.values[key];
-    const cells = columns.map((c) => {
+    const cells = columns.map((c, i) => {
       const v = c.resolved.values[key] ?? { value: def?.default, from: 'default', origin: 'default' as const, own: false };
-      return { ...v, differs: d ? !sameValue(v.value, d.value) : false };
+      const warning = warningFor(key, def, v.value, d?.value, { nozzle: c.nozzle, values: valueMaps[i] });
+      return { ...v, differs: d ? !sameValue(v.value, d.value) : false, ...(warning ? { warning } : {}) };
     });
     const nozzlesDiffer = cells.some((c) => !sameValue(c.value, cells[0].value));
     const ui = def?.ui && def.ui.tab === kind ? def.ui : undefined;
@@ -208,6 +213,7 @@ export interface RowFilter {
   level: Level;
   onlyDiffers?: boolean;
   onlyNozzlesDiffer?: boolean;
+  onlyWarnings?: boolean;
   search?: string;
 }
 
@@ -220,6 +226,7 @@ export function filterRows(rows: Row[], f: RowFilter): Row[] {
     }
     if (f.onlyDiffers && !r.cells.some((c) => c.differs)) return false;
     if (f.onlyNozzlesDiffer && !r.nozzlesDiffer) return false;
+    if (f.onlyWarnings && !r.cells.some((c) => c.warning)) return false;
     if (q) {
       const text = `${r.key} ${r.def?.label ?? ''} ${r.def?.fullLabel ?? ''} ${r.page} ${r.group}`.toLowerCase();
       if (!text.includes(q)) return false;
@@ -279,4 +286,9 @@ export function sliceOf(col: Column, key: string): { full: OrcaValue | undefined
   if (col.variantIndex === undefined || !Array.isArray(shown) || !Array.isArray(full)) return undefined;
   if (full.length === shown.length || full.length % shown.length !== 0) return undefined;
   return { full, index: col.variantIndex, width: shown.length };
+}
+
+/** Number of settings with a warning in at least one nozzle. */
+export function countWarnings(rows: Row[]): number {
+  return rows.filter((r) => r.cells.some((c) => c.warning)).length;
 }

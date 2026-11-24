@@ -1,6 +1,7 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { clearValue, setValue } from '../core/edit';
 import { csv } from '../core/export';
+import { warningFor } from '../core/warnings';
 import type { PresetFile } from '../core/presets';
 import { download } from './download';
 import { Editor, type EditTarget } from './Editor';
@@ -8,6 +9,7 @@ import {
   buildRows,
   columnsFor,
   countDiffers,
+  countWarnings,
   defaultLabel,
     families,
   filterRows,
@@ -88,6 +90,7 @@ function ValueCell({
   const title = [
     cell.origin ? sourceText(cell as Cell) : note,
     v.unknownChoice ? 'Old value: Orca converts or ignores it.' : '',
+    cell.warning ? `Warning: ${cell.warning}` : '',
     edited ? 'Changed in SideFin, not exported yet.' : '',
     onEdit ? 'Click to change.' : '',
   ]
@@ -97,6 +100,11 @@ function ValueCell({
     <td className={cls} title={title} onClick={onEdit} onKeyDown={(e) => e.key === 'Enter' && onEdit?.()} tabIndex={onEdit ? 0 : undefined}>
       {v.long ? <div className={open ? 'full' : 'clamp'}>{v.full}</div> : v.text}
       {v.unknownChoice && <span className="old">old</span>}
+      {cell.warning && (
+        <span className="warnmark" aria-label={`Warning: ${cell.warning}`}>
+          !
+        </span>
+      )}
     </td>
   );
 }
@@ -136,6 +144,7 @@ export function Viewer({
   const [level, setLevel] = useState<Level>('advanced');
   const [onlyDiffers, setOnlyDiffers] = useState(true);
   const [onlyNozzles, setOnlyNozzles] = useState(false);
+  const [onlyWarnings, setOnlyWarnings] = useState(false);
   const [search, setSearch] = useState('');
 
   const fams = useMemo(() => families(presets, kind, printers), [presets, kind, printers]);
@@ -145,7 +154,8 @@ export function Viewer({
         fams.map((f) => {
           const { columns, dflt } = columnsFor(baseline, f, presets, printers);
           const shown = columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
-          return [f.name, countDiffers(filterRows(buildRows(baseline, kind, shown, dflt), { level }))];
+          const r = filterRows(buildRows(baseline, kind, shown, dflt), { level });
+          return [f.name, { differs: countDiffers(r), warnings: countWarnings(r) }];
         }),
       ),
     [fams, baseline, presets, printers, kind, level, hidden],
@@ -157,7 +167,8 @@ export function Viewer({
     const columns = all.columns.filter((c) => c.nozzle === undefined || !hidden.includes(c.nozzle));
     return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt) };
   }, [family, baseline, presets, printers, kind, hidden]);
-  const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, search }) : [];
+  const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
+  const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
 
   // Orca repeats short labels such as "First layer" within a group; use the full label there.
   const seen = new Map<string, number>();
@@ -237,8 +248,15 @@ export function Viewer({
           {fams.map((f) => (
             <button key={f.name} className={`fam${f === family ? ' on' : ''}`} onClick={() => setPicked({ ...picked, [kind]: f.name })}>
               <span>{f.name}</span>
-              <span className="cnt" title="Settings that differ from the default">
-                {counts[f.name] || ''}
+              <span className="cnts">
+                {counts[f.name]?.warnings > 0 && (
+                  <span className="wcnt" title="Settings with a warning">
+                    !{counts[f.name].warnings}
+                  </span>
+                )}
+                <span className="cnt" title="Settings that differ from the default">
+                  {counts[f.name]?.differs || ''}
+                </span>
               </span>
             </button>
           ))}
@@ -263,6 +281,11 @@ export function Viewer({
                   {view.columns.length > 1 && (
                     <button className={`chip${onlyNozzles ? ' on' : ''}`} onClick={() => setOnlyNozzles(!onlyNozzles)}>
                       Only where nozzles differ
+                    </button>
+                  )}
+                  {(warnCount > 0 || onlyWarnings) && (
+                    <button className={`chip warn${onlyWarnings ? ' on' : ''}`} onClick={() => setOnlyWarnings(!onlyWarnings)}>
+                      Only warnings ({warnCount})
                     </button>
                   )}
                   <button className="chip" title="Download the rows shown here as a CSV file, for a spreadsheet" onClick={downloadCsv}>
@@ -341,7 +364,7 @@ export function Viewer({
                                   edited={edited}
                                   onEdit={
                                     col.file && !r.def?.readonly
-                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key) })
+                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }) })
                                       : undefined
                                   }
                                 />
@@ -371,9 +394,12 @@ export function Viewer({
                   Nozzles differ
                 </span>
                 <span>
+                  <span className="warnmark">!</span> Looks odd: far from the default, line width vs nozzle, or temperature vs filament range
+                </span>
+                <span>
                   <b>Bold</b>: set in this preset · normal: inherited · <i className="muted">grey italic</i>: Orca's built-in default
                 </span>
-                <span>Hover a value to see where it comes from, or the i to see what a setting does.</span>
+                <span>Hover a value to see where it comes from, or the i to see what a setting does. Click a value of your preset to change it.</span>
               </div>
             </>
           )}

@@ -11,6 +11,7 @@ Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 - Export: the changed presets as Orca JSON files, one file or a zip with the folders. Settings your Orca version no longer knows can be removed on export, also from unchanged presets. (G4)
 - Backup: download all your presets, exactly as read, as a zip. (G6)
 - Download the table as CSV. (G1)
+- Warnings (!) for values that look odd: a number more than 50% from the printer maker's default, a line width under 60% or over 200% of the nozzle, a nozzle temperature outside the filament's range. Filter "Only warnings"; the editor warns while you type. (G4, feedback point 7)
 
 ## 0.2.0 (2026-11-24)
 

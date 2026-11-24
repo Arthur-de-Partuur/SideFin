@@ -141,3 +141,11 @@ label.check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
 label.check input { margin-top: 4px; }
 dialog.editor label.check input { width: auto; }
 dialog.editor.wide { width: min(860px, calc(100vw - 32px)); }
+
+/* Warnings */
+.warnmark { display: inline-block; margin-left: 6px; min-width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; background: var(--bad); color: var(--surface); font-weight: 700; font-size: 11px; font-family: system-ui, sans-serif; font-style: normal; vertical-align: 1px; }
+.warntext { color: var(--bad); font-weight: 600; }
+.cnts { display: flex; gap: 6px; align-items: baseline; }
+.wcnt { color: var(--bad); font-size: 11px; font-weight: 700; }
+.chip.warn { border-color: var(--bad); color: var(--bad); }
+.chip.warn.on { background: var(--bad); color: var(--surface); }

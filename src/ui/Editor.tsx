@@ -15,6 +15,8 @@ export interface EditTarget {
   edited: boolean;
   /** The preset stores one value per extruder type; only the printer's one is changed. */
   perVariant: boolean;
+  /** Why a value would look odd, by SideFin's warning rules. */
+  warn: (value: OrcaValue) => string | undefined;
 }
 
 const asItems = (v: OrcaValue | undefined) => (v === undefined ? [''] : Array.isArray(v) ? (v.length ? v : ['']) : [v]);
@@ -85,6 +87,9 @@ export function Editor({
     return <input value={value} onChange={(e) => set(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} aria-invalid={invalid} autoFocus={i === 0} />;
   };
 
+  const checked = checkItems(def, inputs);
+  const warning = 'items' in checked ? target.warn(checked.items) : undefined;
+
   const range = [def?.min !== undefined ? `lowest ${def.min}` : '', def?.max !== undefined ? `highest ${def.max}` : ''].filter(Boolean).join(', ');
 
   return (
@@ -108,6 +113,7 @@ export function Editor({
       </div>
       {inputs.length === 1 && items.length > 1 && <p className="muted small">Used for all {items.length} values of this setting, as before.</p>}
       {error && <p className="error small">{error.error}</p>}
+      {!error && warning && <p className="warntext small">Warning: {warning}</p>}
       <dl className="small">
         <dt>Now</dt>
         <dd>
