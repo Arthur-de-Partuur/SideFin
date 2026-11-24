@@ -4,6 +4,8 @@ Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
 ## Next
 
+- Calibration is shown more calmly (remarks C1, C2): the "Due for calibration" list is gone; each filament shows a small grey "N to calibrate", the details stay in its Calibration panel, and a filter shows only filaments to calibrate. (G7)
+- "Value is OK" in the Calibration panel logs the value in the preset now as good, so that test is no longer due. (G7)
 - A link to the filament's brand and material on 3D Filament Profiles, next to "Find the data sheet". Its values are entered by users, and pages often link to the maker's site. SideFin only links to it: the site's terms do not allow copying its data into other tools. (G7, Arthur's suggestion)
 
 ## 0.4.0-dev.1 (2026-11-24)

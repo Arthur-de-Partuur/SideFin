@@ -11,7 +11,7 @@ import {
   otherHardware,
   TESTS,
   type Advice,
-  type Due,
+  type Calibration,
   type Hardware,
   type SideFinData,
 } from '../core/sidefin';
@@ -155,6 +155,12 @@ export function ManufacturerBar({ advice, vendor, type, filament, onEdit }: { ad
 }
 
 const fmtDate = (d: string) => d.split('-').reverse().join('-');
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/** Log method for "the value in the preset is fine as it is". */
+const ACCEPTED = 'accepted as is';
 
 /** Calibration results per nozzle, read from the log. Running and logging tests comes in a later step. */
 export function CalibrationPanel({
@@ -162,11 +168,14 @@ export function CalibrationPanel({
   columns,
   data,
   onHardware,
+  onLog,
 }: {
   filament: string;
   columns: Column[];
   data: SideFinData;
   onHardware: (h: Hardware) => void;
+  /** Add a line to the calibration log. */
+  onLog: (c: Calibration) => void;
 }) {
   const [editHw, setEditHw] = useState(false);
   const [hw, setHw] = useState<Hardware>(data.hardware ?? { hotend: '', extruder: '' });
@@ -192,23 +201,38 @@ export function CalibrationPanel({
                 const entry = latest(data, filament, t.test, c.nozzle);
                 const now = c.resolved.values[t.key]?.value as OrcaValue | undefined;
                 const other = entry && otherHardware(entry.hardware, data.hardware);
+                const shown = showValue(undefined, now).text;
+                const accept = () =>
+                  onLog({
+                    filament,
+                    ...(c.nozzle ? { nozzle: c.nozzle } : {}),
+                    test: t.test,
+                    date: today(),
+                    ...(shown ? { value: shown } : {}),
+                    ...(data.hardware ? { hardware: data.hardware } : {}),
+                    method: ACCEPTED,
+                  });
                 return (
                   <td key={c.name} className="v">
-                    <span title="Value in the preset now">{showValue(undefined, now).text}</span>
+                    <span title="Value in the preset now">{shown}</span>
                     {entry ? (
                       <span className="muted">
                         {' '}
-                        · {entry.value ? `${entry.value} · ` : ''}
-                        {fmtDate(entry.date)}
+                        · {[entry.method === ACCEPTED ? 'OK as is' : entry.value, fmtDate(entry.date)].filter(Boolean).join(' · ')}
                       </span>
                     ) : (
-                      <span className="badge"> not calibrated</span>
+                      <span className="muted"> · not calibrated</span>
                     )}
                     {other && (
-                      <span className="badge" title={`Tested on ${[entry.hardware?.hotend, entry.hardware?.extruder].filter(Boolean).join(' + ')}`}>
+                      <span className="muted" title={`Tested on ${[entry.hardware?.hotend, entry.hardware?.extruder].filter(Boolean).join(' + ')}`}>
                         {' '}
-                        other hardware
+                        · other hardware
                       </span>
+                    )}
+                    {(!entry || other) && (
+                      <button className="linkbtn" title="Log the value in the preset now as good, so this test is no longer due" onClick={accept}>
+                        Value is OK
+                      </button>
                     )}
                     {entry?.note && <div className="muted small">{entry.note}</div>}
                   </td>
@@ -244,33 +268,5 @@ export function CalibrationPanel({
         )}
       </p>
     </details>
-  );
-}
-
-const TEST_LABEL = Object.fromEntries(TESTS.map((t) => [t.test, t.test === 'pa' ? 'PA' : 'max flow']));
-
-/** "Due for calibration", grouped per filament and test. */
-export function DueList({ due, onPick }: { due: Due[]; onPick: (filament: string) => void }) {
-  const groups = new Map<string, { filament: string; test: string; reason: string; nozzles: string[] }>();
-  for (const d of due) {
-    const id = `${d.filament}|${d.test}|${d.reason}`;
-    const g = groups.get(id) ?? { filament: d.filament, test: TEST_LABEL[d.test], reason: d.reason, nozzles: [] };
-    if (d.nozzle) g.nozzles.push(Number(d.nozzle).toFixed(2));
-    groups.set(id, g);
-  }
-  if (!groups.size) return null;
-  return (
-    <div className="due">
-      <div className="lbl">Due for calibration</div>
-      {[...groups.values()].map((g) => (
-        <button key={`${g.filament}|${g.test}|${g.reason}`} className="fam" onClick={() => onPick(g.filament)}>
-          <span>
-            {g.filament.replace(/\s*@.*$/, '')} · {g.test}
-            {g.nozzles.length > 0 && <span className="muted"> {g.nozzles.join(', ')}</span>}
-          </span>
-          <span className="badge">{g.reason}</span>
-        </button>
-      ))}
-    </div>
   );
 }

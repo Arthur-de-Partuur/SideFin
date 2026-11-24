@@ -5,7 +5,7 @@ import { warningFor } from '../core/warnings';
 import type { PresetFile } from '../core/presets';
 import { download } from './download';
 import { Editor, type EditTarget } from './Editor';
-import { AdviceDialog, adviceFor, CalibrationPanel, DueList, ManufacturerBar } from './Filament';
+import { AdviceDialog, adviceFor, CalibrationPanel, ManufacturerBar } from './Filament';
 import { dueList, type SideFinData } from '../core/sidefin';
 import {
   buildRows,
@@ -230,6 +230,13 @@ export function Viewer({
         : [],
     [kind, data, presets, printers],
   );
+  const dueCount = useMemo(() => {
+    const n: Record<string, number> = {};
+    for (const d of due) n[d.filament] = (n[d.filament] ?? 0) + 1;
+    return n;
+  }, [due]);
+  const [onlyDue, setOnlyDue] = useState(false);
+  const showDue = kind === 'filament' && !typeMode;
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
   const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
 
@@ -350,10 +357,23 @@ export function Viewer({
           <div className="lbl">
             {TABS.find((t) => t.kind === kind)?.label} presets{printers ? ` · ${printers.name}` : ''}
           </div>
+          {showDue && due.length > 0 && (
+            <label className="check small onlydue">
+              <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} />
+              Only filaments to calibrate
+            </label>
+          )}
           {fams.length === 0 && <p className="muted small">None found for this printer.</p>}
-          {fams.map((f) => (
+          {fams.filter((f) => !(showDue && onlyDue) || dueCount[f.name]).map((f) => (
             <button key={f.name} className={`fam${f === family ? ' on' : ''}`} onClick={() => setPicked({ ...picked, [pickKey]: f.name })}>
-              <span>{f.name}</span>
+              <span>
+                {f.name}
+                {showDue && dueCount[f.name] > 0 && (
+                  <span className="tocal" title="Pressure advance or max flow tests not done yet, or done on other hardware">
+                    {dueCount[f.name]} to calibrate
+                  </span>
+                )}
+              </span>
               <span className="cnts">
                 {counts[f.name]?.warnings > 0 && (
                   <span className="wcnt" title="Settings with a warning (line width or temperature)">
@@ -366,16 +386,6 @@ export function Viewer({
               </span>
             </button>
           ))}
-          {kind === 'filament' && (
-            <DueList
-              due={due}
-              onPick={(name) => {
-                setByType(false);
-                store.set('byType', '0');
-                setPicked({ ...picked, [kind]: name });
-              }}
-            />
-          )}
         </aside>
 
         <main className="main">
@@ -429,6 +439,7 @@ export function Viewer({
                     columns={view!.columns}
                     data={data}
                     onHardware={(hardware) => onData({ ...data, hardware })}
+                    onLog={(c) => onData({ ...data, calibrations: [...data.calibrations, c] })}
                   />
                 </>
               )}
