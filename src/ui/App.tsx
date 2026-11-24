@@ -143,6 +143,7 @@ export function App() {
     () => Object.fromEntries((loaded?.presets ?? []).filter((p) => edits[p.path]).map((p) => [p.path, changedKeys(p.json, edits[p.path])])),
     [loaded, edits],
   );
+  const originals = useMemo(() => Object.fromEntries((loaded?.presets ?? []).map((p) => [p.path, p.json])), [loaded]);
   /** Apply changes to one or more presets as one step, so one Undo takes them all back. */
   const update = (changes: { file: PresetFile; json: ProfileJson }[]) => {
     setHistory([...history, edits]);
@@ -281,7 +282,7 @@ export function App() {
         <Changes baseline={baseline} originals={loaded.presets} current={edits} canUndo={history.length > 0} onUndo={undo} onDiscard={discard} />
       )}
       {loaded && baseline && loaded.presets.length > 0 && (
-        <Viewer baseline={baseline} presets={presets} printers={printer} changed={changed} onUpdate={update} />
+        <Viewer baseline={baseline} presets={presets} printers={printer} changed={changed} originals={originals} onUpdate={update} />
       )}
 
       <footer>

@@ -20,6 +20,10 @@ export interface EditTarget {
   others: number;
   /** Why a value would look odd, by SideFin's warning rules. */
   warn: (value: OrcaValue) => Warning | undefined;
+  /** For a value changed in SideFin: what your file holds (undefined = not set in the file, so inherited). */
+  inFile?: { value: OrcaValue | undefined };
+  /** Put back the value from your file. */
+  onRestore: () => void;
   /** Mark the current value as deliberate (true), or show its warning again (false). */
   onExplain: (on: boolean) => void;
 }
@@ -139,7 +143,13 @@ export function Editor({
         </p>
       )}
       <dl className="small">
-        <dt>Now</dt>
+        {target.edited && target.inFile && (
+          <>
+            <dt>In your file</dt>
+            <dd>{target.inFile.value === undefined ? '(not set: inherited)' : showValue(def, target.inFile.value).text || '(empty)'}</dd>
+          </>
+        )}
+        <dt>{target.edited ? 'Now in SideFin' : 'Now'}</dt>
         <dd>
           {showValue(def, cell.value).text || '(empty)'}{' '}
           <span className="muted">({cell.own ? 'set in this preset' : cell.origin === 'default' ? "Orca's built-in default" : `from "${cell.from}"`})</span>
@@ -157,6 +167,11 @@ export function Editor({
         <button className="primary" onClick={save}>
           Change
         </button>
+        {target.edited && (
+          <button onClick={target.onRestore} title="Undo the changes to this setting in this preset: back to what your file holds">
+            Back to my value
+          </button>
+        )}
         {cell.own && (
           <button onClick={onClear} title={`Remove the value from this preset, so it comes from the preset it inherits from${target.perVariant ? ' (for all extruder types)' : ''}`}>
             Back to inherited

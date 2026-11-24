@@ -17,6 +17,7 @@ import {
   showValue,
   sliceOf,
   type Cell,
+  type Column,
   type Level,
   type PrinterFamily,
   type Row,
@@ -117,6 +118,7 @@ export function Viewer({
   presets,
   printers,
   changed,
+  originals,
   onUpdate,
 }: {
   baseline: Baseline;
@@ -124,6 +126,8 @@ export function Viewer({
   printers?: PrinterFamily;
   /** Settings changed in SideFin and not exported yet, per preset path. */
   changed: Record<string, string[]>;
+  /** The presets as read from the folder, by path, before any change. */
+  originals: Record<string, ProfileJson>;
   onUpdate: (changes: { file: PresetFile; json: ProfileJson }[]) => void;
 }) {
   const [editing, setEditing] = useState<EditTarget>();
@@ -241,6 +245,20 @@ export function Viewer({
         return { file: c.file!, json: setValue(c.file!.json, key, own, shown, sliceOf(c, key)) };
       }),
     );
+    setEditing(undefined);
+  };
+  /** The value your file holds for a setting, for the printer's extruder type where the file stores one per type. */
+  const inFileValue = (col: Column, key: string) => {
+    const v = col.file ? (originals[col.file.path]?.[key] as ProfileJson[string] | undefined) : undefined;
+    const slice = sliceOf(col, key);
+    if (slice && Array.isArray(v) && v.length === (slice.full as string[]).length) return v.slice(slice.index * slice.width, slice.index * slice.width + slice.width);
+    return v as string | string[] | undefined;
+  };
+  const restore = (col: Column, key: string) => {
+    if (!col.file) return;
+    const original = originals[col.file.path];
+    const json = original && key in original ? { ...col.file.json, [key]: original[key] } : clearValue(col.file.json, key);
+    onUpdate([{ file: col.file, json }]);
     setEditing(undefined);
   };
   const clearEdit = () => {
@@ -428,7 +446,7 @@ export function Viewer({
                                   edited={edited}
                                   onEdit={
                                     col.file && !r.def?.readonly
-                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), others: typeMode ? view.columns.filter((x) => x.file && x !== col).length : 0, warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }), onExplain: (on) => explain(view.columns.map((x, j) => ({ name: x.name, value: r.cells[j].value })).filter((_, j) => (on ? r.cells[j].warning : r.cells[j].explained)), r.key, on) })
+                                      ? () => setEditing({ key: r.key, label: labelOf(r), def: r.def, column: col, cell: c, dflt: r.dflt?.value, dfltLabel: defaultLabel(view.dflt), edited, perVariant: !!sliceOf(col, r.key), others: typeMode ? view.columns.filter((x) => x.file && x !== col).length : 0, warn: (v) => warningFor(r.key, r.def, v, r.dflt?.value, { nozzle: col.nozzle, values: Object.fromEntries(Object.entries(col.resolved.values).map(([k, x]) => [k, x.value])) }), inFile: edited ? { value: inFileValue(col, r.key) } : undefined, onRestore: () => restore(col, r.key), onExplain: (on) => explain(view.columns.map((x, j) => ({ name: x.name, value: r.cells[j].value })).filter((_, j) => (on ? r.cells[j].warning : r.cells[j].explained)), r.key, on) })
                                       : undefined
                                   }
                                 />
