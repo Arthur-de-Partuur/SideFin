@@ -6,6 +6,7 @@ import type { Column } from '../core/table';
 import { showValue } from '../core/table';
 import {
   datasheetSearch,
+  filamentProfilesLink,
   latest,
   otherHardware,
   TESTS,
@@ -47,12 +48,14 @@ function useModal() {
 export function AdviceDialog({
   filament,
   vendor,
+  type,
   advice,
   onSave,
   onClose,
 }: {
   filament: string;
   vendor?: string;
+  type?: string;
   advice?: Advice;
   onSave: (a: Advice | undefined) => void;
   onClose: () => void;
@@ -75,7 +78,10 @@ export function AdviceDialog({
         <a href={datasheetSearch(vendor, a.product || filament.replace(/\s*@.*$/, ''))} target="_blank" rel="noreferrer">
           Find the data sheet
         </a>{' '}
-        (opens a web search)
+        (opens a web search) ·{' '}
+        <a href={filamentProfilesLink(vendor, type)} target="_blank" rel="noreferrer" title="Values entered by users, often with a link to the maker's site">
+          3D Filament Profiles
+        </a>
       </p>
       <div className="fields">
         <label>
@@ -116,7 +122,7 @@ export function AdviceDialog({
 }
 
 /** One line above the table: whose advice, where from, and a way to find or change it. */
-export function ManufacturerBar({ advice, vendor, filament, onEdit }: { advice?: Advice; vendor?: string; filament: string; onEdit: () => void }) {
+export function ManufacturerBar({ advice, vendor, type, filament, onEdit }: { advice?: Advice; vendor?: string; type?: string; filament: string; onEdit: () => void }) {
   return (
     <div className="mfbar small">
       <span className="lbl">Manufacturer</span>
@@ -138,6 +144,9 @@ export function ManufacturerBar({ advice, vendor, filament, onEdit }: { advice?:
           Find the data sheet
         </a>
       )}
+      <a href={filamentProfilesLink(vendor, type)} target="_blank" rel="noreferrer" title="Values entered by users, often with a link to the maker's site">
+        3D Filament Profiles
+      </a>
       <button className="linkbtn" onClick={onEdit}>
         {advice ? 'Change' : 'Add advice'}
       </button>

@@ -217,6 +217,8 @@ export function Viewer({
   const advice = filamentView ? data.advice[family!.name] : undefined;
   const vendorValue = view?.columns[0]?.resolved.values.filament_vendor?.value;
   const vendor = Array.isArray(vendorValue) ? vendorValue[0] : vendorValue;
+  const typeValue = view?.columns[0]?.resolved.values.filament_type?.value;
+  const ftype = Array.isArray(typeValue) ? typeValue[0] : typeValue;
   const [adviceOpen, setAdviceOpen] = useState(false);
   const due = useMemo(
     () =>
@@ -421,7 +423,7 @@ export function Viewer({
 
               {filamentView && (
                 <>
-                  <ManufacturerBar advice={advice} vendor={vendor} filament={family!.name} onEdit={() => setAdviceOpen(true)} />
+                  <ManufacturerBar advice={advice} vendor={vendor} type={ftype} filament={family!.name} onEdit={() => setAdviceOpen(true)} />
                   <CalibrationPanel
                     filament={family!.name}
                     columns={view!.columns}
@@ -543,6 +545,7 @@ export function Viewer({
         <AdviceDialog
           filament={family.name}
           vendor={vendor}
+          type={ftype}
           advice={advice}
           onClose={() => setAdviceOpen(false)}
           onSave={(a) => {

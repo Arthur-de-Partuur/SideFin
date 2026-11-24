@@ -2,6 +2,10 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## Next
+
+- A link to the filament's brand and material on 3D Filament Profiles, next to "Find the data sheet". Its values are entered by users, and pages often link to the maker's site. SideFin only links to it: the site's terms do not allow copying its data into other tools. (G7, Arthur's suggestion)
+
 ## 0.4.0-dev.1 (2026-11-24)
 
 - SideFin keeps its own file in your Orca data folder: `sidefin/sidefin.json`, next to `user`. It holds what Orca has no place for: the filament maker's advice, the calibration log and the printer's hardware now. Orca's cache cleanup leaves it alone. It is exported with the presets. (G7, decision S1)

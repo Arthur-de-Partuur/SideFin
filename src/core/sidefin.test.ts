@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dataJson, datasheetSearch, dueList, latest, otherHardware, parseData, type SideFinData } from './sidefin';
+import { dataJson, datasheetSearch, dueList, filamentProfilesLink, latest, otherHardware, parseData, type SideFinData } from './sidefin';
 
 const data: SideFinData = {
   schema: 1,
@@ -41,5 +41,15 @@ describe('sidefin.json', () => {
 
   it('makes a data sheet search link', () => {
     expect(datasheetSearch('eSun', 'PETG')).toBe('https://www.google.com/search?q=eSun%20PETG%20filament%20technical%20data%20sheet');
+  });
+
+  it('links to the brand and material on 3D Filament Profiles', () => {
+    const base = 'https://3dfilamentprofiles.com/filaments';
+    expect(filamentProfilesLink('ColorFabb', 'PETG')).toBe(`${base}/colorfabb/petg`);
+    expect(filamentProfilesLink('123-3D', 'ASA')).toBe(`${base}/123-3d/asa`);
+    expect(filamentProfilesLink('Extrudr', 'ASA-CF')).toBe(`${base}/extrudr/asa`);
+    expect(filamentProfilesLink('Bambu Lab', 'PLA+')).toBe(`${base}/bambu-lab/pla-plus`);
+    expect(filamentProfilesLink('Generic', 'TPU')).toBe(`${base}?material_key=tpu`);
+    expect(filamentProfilesLink(undefined, undefined)).toBe(base);
   });
 });

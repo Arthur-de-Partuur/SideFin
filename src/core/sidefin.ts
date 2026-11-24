@@ -114,6 +114,22 @@ export function dueList(data: SideFinData, filaments: { name: string; nozzles: (
   return out;
 }
 
+const slug = (s: string) => s.trim().toLowerCase().replace(/\+/g, '-plus').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+/**
+ * The brand and material page on 3D Filament Profiles (community values,
+ * often with a link to the maker's site). Only a link: the site's terms do
+ * not allow copying its data into other tools.
+ */
+export function filamentProfilesLink(vendor: string | undefined, type: string | undefined): string {
+  const base = 'https://3dfilamentprofiles.com/filaments';
+  // "PETG-CF", "ASA-GF": the site files these under the base material.
+  const material = type ? slug(type.replace(/-(CF|GF|HF|AERO)$/i, '')) : '';
+  const brand = vendor && !/^generic$/i.test(vendor.trim()) ? slug(vendor) : '';
+  if (brand) return material ? `${base}/${brand}/${material}` : `${base}/${brand}`;
+  return material ? `${base}?material_key=${material}` : base;
+}
+
 /** A web search for the maker's data sheet of a filament. */
 export function datasheetSearch(vendor: string | undefined, product: string): string {
   const q = [vendor, product, 'filament technical data sheet'].filter(Boolean).join(' ');
