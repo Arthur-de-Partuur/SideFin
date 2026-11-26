@@ -2,7 +2,7 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
-## 0.5.0-dev.1 (2026-11-26)
+## 0.5.0 (2026-11-26)
 
 Step 5: what an Orca update changes (G5, P5).
 
