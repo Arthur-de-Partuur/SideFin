@@ -197,7 +197,7 @@ export function buildRows(baseline: Baseline, kind: PresetKind, columns: Column[
     rows.push({
       key,
       def,
-      page: ui?.page ?? 'Not shown in Orca',
+      page: ui?.page ?? OTHER_PAGE,
       group: ui?.group ?? (def ? 'Stored in the preset, no field in Orca' : 'Not an Orca setting'),
       cells,
       dflt: d,
@@ -227,7 +227,7 @@ export function filterRows(rows: Row[], f: RowFilter): Row[] {
   const q = f.search?.trim().toLowerCase();
   return rows.filter((r) => {
     if (f.level !== 'all') {
-      if (r.page === 'Not shown in Orca') return false;
+      if (r.page === OTHER_PAGE) return false;
       if (!r.def || !LEVEL_MODES[f.level].includes(r.def.mode)) return false;
     }
     if (f.onlyDiffers && !r.cells.some((c) => c.differs)) return false;
@@ -239,6 +239,52 @@ export function filterRows(rows: Row[], f: RowFilter): Row[] {
     }
     return true;
   });
+}
+
+export const OTHER_PAGE = 'Not shown in Orca';
+
+/** Orca adds the filament's Setting Overrides page after Cooling (TabFilament::add_filament_overrides_page). */
+const PAGE_AFTER: Record<string, string> = { 'Setting Overrides': 'Cooling' };
+
+export interface PageInfo {
+  page: string;
+  /** Settings on this page after the level filter. */
+  rows: number;
+  /** Of those, settings where a nozzle differs from the default. */
+  differs: number;
+  /** Of those, settings with a red warning. */
+  warnings: number;
+  /** Settings that pass all filters and the search. */
+  hits: number;
+}
+
+/**
+ * Orca's pages in Orca's order (rows come sorted by Orca's position), with
+ * counts per page. Settings Orca does not show come last, as "Other".
+ */
+export function pages(levelRows: Row[], shownRows: Row[]): PageInfo[] {
+  const out = new Map<string, PageInfo>();
+  for (const r of levelRows) {
+    const p = out.get(r.page) ?? { page: r.page, rows: 0, differs: 0, warnings: 0, hits: 0 };
+    p.rows++;
+    if (r.cells.some((c) => c.differs)) p.differs++;
+    if (r.cells.some((c) => c.warning?.level === 'warn')) p.warnings++;
+    out.set(r.page, p);
+  }
+  for (const r of shownRows) {
+    const p = out.get(r.page);
+    if (p) p.hits++;
+  }
+  const list = [...out.values()].filter((p) => p.page !== OTHER_PAGE);
+  // Pages Orca builds in a separate function and inserts elsewhere.
+  for (const [page, after] of Object.entries(PAGE_AFTER)) {
+    const i = list.findIndex((p) => p.page === page);
+    const j = list.findIndex((p) => p.page === after);
+    if (i < 0 || j < 0) continue;
+    const [moved] = list.splice(i, 1);
+    list.splice(list.findIndex((p) => p.page === after) + 1, 0, moved);
+  }
+  return [...list, ...[...out.values()].filter((p) => p.page === OTHER_PAGE)];
 }
 
 /** Number of settings where at least one nozzle differs from the default. */

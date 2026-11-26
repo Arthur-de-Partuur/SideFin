@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { baseline } from './fixtures/baseline';
 import type { PresetFile } from './presets';
-import { buildRows, columnsFor, countDiffers, families, filterRows, printerFamilies, showValue, typeFamilies } from './table';
+import { buildRows, columnsFor, countDiffers, families, filterRows, OTHER_PAGE, pages, printerFamilies, showValue, typeFamilies, type Row } from './table';
 
 const file = (kind: PresetFile['kind'], json: PresetFile['json']): PresetFile => ({ kind, path: `${kind}/${json.name}.json`, json });
 
@@ -84,5 +84,23 @@ describe('filaments by type', () => {
     ]);
     const { columns } = columnsFor(baseline, groups[0], list, me);
     expect(columns.map((c) => c.label)).toEqual(['PETG A @Me', 'PETG B @Me']);
+  });
+});
+
+describe('Orca pages', () => {
+  const row = (key: string, page: string, differs = false, warn = false) =>
+    ({ key, page, group: 'G', nozzlesDiffer: false, cells: [{ value: '1', from: 'x', origin: 'user', own: true, differs, ...(warn ? { warning: { level: 'warn', text: '!' } } : {}) }] }) as unknown as Row;
+  const rows = [row('a', 'Quality', true), row('b', OTHER_PAGE), row('c', 'Quality', false, true), row('d', 'Strength', true)];
+
+  it('keeps Orca\'s order, puts settings Orca does not show last, and counts per page', () => {
+    const list = pages(rows, [rows[0], rows[3]]);
+    expect(list.map((p) => p.page)).toEqual(['Quality', 'Strength', OTHER_PAGE]);
+    expect(list[0]).toEqual({ page: 'Quality', rows: 2, differs: 1, warnings: 1, hits: 1 });
+    expect(list[2].hits).toBe(0);
+  });
+
+  it('shows Setting Overrides after Cooling, as Orca does', () => {
+    const list = pages([row('a', 'Filament'), row('b', 'Cooling'), row('c', 'Advanced'), row('d', 'Setting Overrides')], []);
+    expect(list.map((p) => p.page)).toEqual(['Filament', 'Cooling', 'Setting Overrides', 'Advanced']);
   });
 });

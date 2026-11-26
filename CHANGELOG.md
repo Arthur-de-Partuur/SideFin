@@ -2,6 +2,20 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.4.1 (2026-11-26)
+
+Orca's pages as tabs and a light/dark switch.
+
+### 0.4.1-dev.2
+
+- Light, System or Dark, top right. System follows the Windows or browser setting; the choice is remembered in this browser. (Arthur's request, as in NegoTrack)
+
+### 0.4.1-dev.1
+
+- Orca's pages as tabs above the table, in Orca's order: for filaments Filament, Cooling, Setting Overrides, Advanced, Multimaterial, Dependencies, Notes; for processes Quality, Strength, Speed, Support, Multimaterial, Others. Each tab shows how many settings differ from the default, and a red "!" for warnings. With a filter or a search on, the tabs show the number of matches instead. The chosen page is remembered per tab. (G1, remark C4)
+- Settings Orca stores but does not show get an "Other" tab, at level All.
+- Orca's groups (Basic information, Print temperature, ...) can be folded open and closed; SideFin remembers which are closed. (remark C4)
+
 ## 0.4.0 (2026-11-26)
 
 Manufacturer advice, calibration log and calibration working (G7, G8 brought forward from step 6). Built up in the dev versions below.

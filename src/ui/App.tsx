@@ -248,6 +248,7 @@ export function App() {
             Folder: {loaded.folder}
           </button>
         )}
+        <ThemeSwitch />
       </header>
 
       <input
@@ -329,6 +330,40 @@ export function App() {
         <a href={`${REPO}/blob/main/CHANGELOG.md`}>What's new</a>
         <a href={`${REPO}/blob/main/LICENSE`}>AGPL-3.0</a>
       </footer>
+    </div>
+  );
+}
+
+type Theme = 'light' | 'system' | 'dark';
+
+/** Light, Dark or follow the system; remembered in this browser. */
+function ThemeSwitch() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const t = store.get('theme');
+    return t === 'light' || t === 'dark' ? t : 'system';
+  });
+  const choose = (t: Theme) => {
+    setTheme(t);
+    if (t === 'system') {
+      delete document.documentElement.dataset.theme;
+      store.set('theme', 'system');
+    } else {
+      document.documentElement.dataset.theme = t;
+      store.set('theme', t);
+    }
+  };
+  const options: [Theme, string, string][] = [
+    ['light', 'Light', 'Always light'],
+    ['system', 'System', 'Follow the Windows or browser setting'],
+    ['dark', 'Dark', 'Always dark'],
+  ];
+  return (
+    <div className="seg theme" role="group" aria-label="Colour theme">
+      {options.map(([t, label, title]) => (
+        <button key={t} className={theme === t ? 'on' : ''} aria-pressed={theme === t} title={title} onClick={() => choose(t)}>
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

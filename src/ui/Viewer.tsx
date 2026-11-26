@@ -16,6 +16,8 @@ import {
   defaultLabel,
     families,
   filterRows,
+  OTHER_PAGE,
+  pages as pageList,
   showValue,
   sliceOf,
   type Cell,
@@ -256,7 +258,34 @@ export function Viewer({
   };
   const showDue = kind === 'filament' && !typeMode;
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
-  const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
+  const levelRows = view ? filterRows(view.rows, { level }) : [];
+  const warnCount = countWarnings(levelRows);
+  // Orca's pages as tabs, remembered per tab (Printer, Filament, Process).
+  const pageInfo = pageList(levelRows, rows);
+  const [pageChoice, setPageChoice] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(store.get('pages') ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const page = pageInfo.find((p) => p.page === pageChoice[kind])?.page ?? pageInfo[0]?.page;
+  const pickPage = (p: string) => {
+    const next = { ...pageChoice, [kind]: p };
+    setPageChoice(next);
+    store.set('pages', JSON.stringify(next));
+  };
+  const filtering = onlyDiffers || onlyNozzles || onlyWarnings || !!search.trim();
+  const pageRows = rows.filter((r) => r.page === page);
+  // Collapsed groups, by tab, page and group, remembered.
+  const [collapsed, setCollapsed] = useState<string[]>(() => (store.get('collapsed') ?? '').split('\n').filter(Boolean));
+  const groupId = (group: string) => `${kind}|${page}|${group}`;
+  const toggleGroup = (group: string) => {
+    const id = groupId(group);
+    const next = collapsed.includes(id) ? collapsed.filter((x) => x !== id) : [...collapsed, id];
+    setCollapsed(next);
+    store.set('collapsed', next.join('\n'));
+  };
 
   // Orca repeats short labels such as "First layer" within a group; use the full label there.
   const seen = new Map<string, number>();
@@ -462,6 +491,22 @@ export function Viewer({
                   />
                 </>
               )}
+              {pageInfo.length > 0 && (
+                <nav className="pages" aria-label="Orca pages">
+                  {pageInfo.map((p) => (
+                    <button
+                      key={p.page}
+                      className={`pgtab${p.page === page ? ' on' : ''}${filtering && p.hits === 0 ? ' none' : ''}`}
+                      title={`${p.rows} settings on this page${p.differs ? `, ${p.differs} differ from the default` : ''}${p.warnings ? `, ${p.warnings} with a warning` : ''}${filtering ? `; ${p.hits} match the filters` : ''}`}
+                      onClick={() => pickPage(p.page)}
+                    >
+                      {p.page === OTHER_PAGE ? 'Other' : p.page}
+                      {p.warnings > 0 && <span className="wcnt">!{p.warnings}</span>}
+                      <span className="cnt">{filtering ? p.hits : p.differs || ''}</span>
+                    </button>
+                  ))}
+                </nav>
+              )}
               <div className="tablewrap">
                 <table>
                   <thead>
@@ -477,25 +522,31 @@ export function Viewer({
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.length === 0 && (
+                    {pageRows.length === 0 && (
                       <tr>
                         <td colSpan={view.columns.length + (filamentView ? 3 : 2)} className="muted">
-                          No settings match. Try another level or turn off a filter.
+                          {rows.length > 0 ? 'Nothing on this page matches. The counts on the page tabs show where the matches are.' : 'No settings match. Try another level or turn off a filter.'}
                         </td>
                       </tr>
                     )}
-                    {rows.map((r) => {
-                      const head = `${r.page} · ${r.group}`;
+                    {pageRows.map((r) => {
+                      const head = r.group;
                       const showHead = head !== lastHead;
                       lastHead = head;
+                      const closed = collapsed.includes(groupId(r.group));
                       return (
                         <Fragment key={r.key}>
                           {showHead && (
                             <tr className="grp">
-                              <td colSpan={view.columns.length + (filamentView ? 3 : 2)}>{head}</td>
+                              <td colSpan={view.columns.length + (filamentView ? 3 : 2)}>
+                                <button className="grpbtn" aria-expanded={!closed} onClick={() => toggleGroup(r.group)}>
+                                  <span className="caret">{closed ? '\u25b8' : '\u25be'}</span> {head}
+                                  {closed && <span className="muted"> · {pageRows.filter((x) => x.group === r.group).length} settings</span>}
+                                </button>
+                              </td>
                             </tr>
                           )}
-                          <tr>
+                          {!closed && <tr>
                             <td className="name">
                               {labelOf(r)}
                               {r.def?.unit && <span className="unit"> {r.def.unit}</span>}
@@ -540,7 +591,7 @@ export function Viewer({
                                 {adviceFor(advice, r.key) ?? ''}
                               </td>
                             )}
-                          </tr>
+                          </tr>}
                         </Fragment>
                       );
                     })}

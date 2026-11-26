@@ -6,6 +6,13 @@
     <meta name="description" content="SideFin: see your OrcaSlicer profiles next to your printer maker's defaults, per nozzle." />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <title>SideFin</title>
+    <script>
+      // Light, Dark or System, chosen in the header; set before the page draws, so it does not flash.
+      try {
+        var t = localStorage.getItem('sidefin.theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
