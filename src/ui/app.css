@@ -212,3 +212,18 @@ dialog.orcaupd table.upd { border-collapse: collapse; width: 100%; margin: 6px 0
 dialog.orcaupd table.upd th { position: static; }
 dialog.orcaupd table.upd td { padding: 3px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 dialog.orcaupd table.upd td.v { font-family: var(--mono); font-size: 12px; max-width: 260px; overflow-wrap: anywhere; }
+
+/* Save into the Orca folder (G4, step 7) */
+.closeorca { border: 1px solid var(--warn); border-left-width: 4px; border-radius: 6px; padding: 6px 10px; margin: 8px 0 10px !important; font-size: 13px; }
+.closeorca b { color: var(--warn); }
+.conflicts { border: 1px solid var(--bad); border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.conflicts table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+.conflicts td { padding: 4px 0; vertical-align: top; }
+.conflicts td.pick { width: 1%; white-space: nowrap; padding-left: 12px; }
+.backupchoice { margin: 6px 0 10px; }
+ol.backups { padding-left: 20px; max-height: 50vh; overflow: auto; }
+ol.backups > li { margin: 4px 0; }
+ol.backups .bk { margin: 6px 0 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
+ol.backups .bk ul { margin: 0 0 6px; padding-left: 18px; }
+.notice { display: flex; align-items: center; gap: 10px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 6px 12px; }
+.notice > span { margin-right: auto; }

@@ -2,9 +2,21 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
-## 0.5.1 (unreleased)
+## 1.0.0 (unreleased)
 
-### 0.5.1-dev.1
+Step 7: save straight into the Orca data folder (G4).
+
+### 1.0.0-dev.1
+
+- Save replaces Export in Chrome and Edge: it writes the changed presets and `sidefin/sidefin.json` into your Orca data folder. The browser asks once per visit for permission to edit files. Firefox, which cannot write to folders, keeps Export. (G4)
+  - The Save dialog starts with "Close Orca first": Orca reads presets only when it starts, and saving in Orca would overwrite SideFin's save.
+  - "Make a backup first" (on by default; a red line says what you lose when you turn it off) copies the files as they are on disk to `sidefin/backup/<date time>/`, with a `backup-info.json`.
+  - "Keep only the last 10 backups" (remembered); the dialog says how many older backups this removes before you save. Only SideFin's own backup folders are ever removed.
+  - SideFin notes each file's time and size when it reads the folder. A file that changed on disk since (for example saved in Orca) is shown with both, and you choose "Skip this file" (default; your changes stay, unsaved) or "Overwrite anyway" (the newer file goes into the backup first).
+  - Files are written through a temporary file and swapped in, so a crash cannot leave half a file. After saving, SideFin reads the folder again.
+- Backups (top bar): every backup with date and files, and Restore, which backs up the current files first. Restore waits until you have saved or discarded your changes. The zip download of all presets moved into this dialog. (G4)
+- SideFin's backup folder is never read as presets.
+- Printer tab: the pages now come in Orca's order (Basic information, Machine G-code, Multimaterial, Extruder, Motion ability, Notes). (G1)
 
 - Printer tab: the pages now come in Orca's order (Basic information, Machine G-code, Multimaterial, Extruder, Motion ability, Notes). (G1)
 

@@ -11,6 +11,7 @@
      - `edit.ts`: checking a typed value as Orca would, changing a preset, and writing it as Orca does (keys sorted, four spaces).
      - `export.ts`: the zip and CSV files the app hands you.
      - `sidefin.ts`: SideFin's own file `<data folder>/sidefin/sidefin.json` (maker's advice, calibration log, hardware) and which tests are due.
+     - `save.ts`: saving into the Orca data folder: backup folder names, which old backups to remove (keep the last 10), and which files changed on disk since SideFin read them. The browser part (writing files, backups, restore) is in `src/ui/folder.ts`.
      - `orcaUpdate.ts`: what an Orca update changes for your presets: changed inherited values, own values that are an old default, new and obsolete settings.
      - `calibrate.ts`: the calibration methods (Orca, Ellis, hotend flow tester) and the values to type into each, worked out from the presets. For the hotend flow tester it also turns the printer's start and end G-code into the tool's `${variable}` form (`flowTesterGcode`).
    - `src/ui/`: the screens.

@@ -49,7 +49,7 @@ compare two presets.
 | 4 | 0.4 | Manufacturer advice, calibration log, and calibration working (brought forward from step 6) | G7, G8 |
 | 5 | 0.5 | Orca update changes: inherited values that changed, own values that are an old default, new settings marked, obsolete settings marked | G5 |
 | 6 | 0.6 | Calibration: more tests and methods (first part done in 0.4) | G7, G8 |
-| 7 | 1.0 | Save directly into the Orca data folder, with backup | G4 |
+| 7 | 1.0 | Save directly into the Orca data folder: close-Orca warning, backup first (keep the last 10 or all), check for files changed on disk, backups list with Restore; Export only where the browser cannot write. Done before step 6 (Arthur, 26 Nov 2026) | G4 |
 
 ## Parked ideas (no goal yet)
 

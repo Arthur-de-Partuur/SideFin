@@ -7,7 +7,8 @@ import type { Baseline, BaselineIndex, ProfileJson } from '../core/types';
 import { isNewer, onlineVersion } from '../core/update';
 import { olderVersions } from '../core/orcaUpdate';
 import { OrcaUpdateDialog } from './OrcaUpdate';
-import { allowRead, canPickFolder, readFileList, readFolder, rememberedFolder, rememberFolder, type FolderFile } from './folder';
+import { allowRead, canPickFolder, canWrite, readFileList, readFolder, rememberedFolder, rememberFolder, type FolderFile } from './folder';
+import { BackupsDialog, type SaveResult } from './Save';
 import { backup, Changes } from './Changes';
 import { Logo } from './Logo';
 import { Viewer } from './Viewer';
@@ -39,9 +40,11 @@ interface Loaded {
   skipped: string[];
   /** The preset files as read, for the backup. */
   files: FolderFile[];
+  /** The folder itself, when this browser can write into it (Chrome, Edge). */
+  dir?: FileSystemDirectoryHandle;
 }
 
-/** Changes not exported yet, per preset path; kept in the browser so a reload does not lose them. */
+/** Changes not saved yet, per preset path; kept in the browser so a reload does not lose them. */
 type Edits = Record<string, ProfileJson>;
 const editsKey = (folder: string) => `edits.${folder}`;
 
@@ -53,6 +56,8 @@ export function App() {
   const cache = useRef<Record<string, Promise<Baseline>>>({});
   const [previous, setPrevious] = useState<Baseline>();
   const [showUpdate, setShowUpdate] = useState(false);
+  const [showBackups, setShowBackups] = useState(false);
+  const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
   const [newer, setNewer] = useState<string>();
   const [loaded, setLoaded] = useState<Loaded>();
@@ -63,7 +68,11 @@ export function App() {
   const [edits, setEdits] = useState<Edits>({});
   const [history, setHistory] = useState<{ edits: Edits; data: SideFinData }[]>([]);
   // SideFin's own file: as read from the folder, and as changed here.
-  const [dataRead, setDataRead] = useState<{ data: SideFinData; exists: boolean; error?: string }>(() => ({ ...parseData(undefined), exists: false }));
+  const [dataRead, setDataRead] = useState<{
+    data: SideFinData;
+    exists: boolean;
+    error?: string;
+  }>(() => ({ ...parseData(undefined), exists: false }));
   const [data, setData] = useState<SideFinData>(dataRead.data);
 
   const keepEdits = (next: Edits, folder = loaded?.folder) => {
@@ -106,7 +115,10 @@ export function App() {
       })
       .catch((e) => setError(`Could not load the Orca ${orca} defaults (${e.message}).`));
     // The version before it, for "new in" marks in the table.
-    const prev = olderVersions(index!.versions.map((v) => v.orcaVersion), orca)[0];
+    const prev = olderVersions(
+      index!.versions.map((v) => v.orcaVersion),
+      orca,
+    )[0];
     setPrevious(undefined);
     if (prev) loadVersion(prev).then(setPrevious, () => undefined);
   }, [index, orca]);
@@ -121,10 +133,16 @@ export function App() {
     return () => clearInterval(t);
   }, []);
 
-  const load = (folder: string, files: FolderFile[]) => {
+  const load = (folder: string, files: FolderFile[], dir?: FileSystemDirectoryHandle) => {
     const { presets, skipped } = collectPresets(files);
     const paths = new Set(presets.map((p) => p.path));
-    setLoaded({ folder, presets, skipped, files: files.filter((f) => paths.has(f.path.replace(/\\/g, '/')) || f.path.replace(/\\/g, '/') === DATA_PATH) });
+    setLoaded({
+      folder,
+      presets,
+      skipped,
+      files: files.filter((f) => paths.has(f.path.replace(/\\/g, '/')) || f.path.replace(/\\/g, '/') === DATA_PATH),
+      dir: canWrite(dir) ? dir : undefined,
+    });
     let saved: Edits = {};
     try {
       saved = JSON.parse(store.get(editsKey(folder)) ?? '{}');
@@ -159,16 +177,19 @@ export function App() {
         fileInput.current?.click();
         return;
       }
-      const dir = await window.showDirectoryPicker!({ id: 'orca-datadir', mode: 'read' });
+      const dir = await window.showDirectoryPicker!({
+        id: 'orca-datadir',
+        mode: 'read',
+      });
       await rememberFolder(dir);
       setRemembered(dir);
-      load(dir.name, await readFolder(dir));
+      load(dir.name, await readFolder(dir), dir);
     });
 
   const reopen = () =>
     run(async () => {
       if (!remembered || !(await allowRead(remembered))) return;
-      load(remembered.name, await readFolder(remembered));
+      load(remembered.name, await readFolder(remembered), remembered);
     });
 
   const presets = useMemo(() => loaded?.presets.map((p) => (edits[p.path] ? { ...p, json: edits[p.path] } : p)) ?? [], [loaded, edits]);
@@ -207,6 +228,29 @@ export function App() {
     keepData(dataRead.data);
   };
   const dataChanged = dataJson(data) !== dataJson(dataRead.data);
+  const stamps = useMemo(() => Object.fromEntries((loaded?.files ?? []).map((f) => [f.path.replace(/\\/g, '/'), f.stamp])), [loaded]);
+
+  /** After a save or restore: drop the saved changes, read the folder again and say what happened. */
+  const afterSave = (r: SaveResult) => {
+    if (!loaded?.dir) return;
+    const dir = loaded.dir;
+    const saved = new Set(r.saved);
+    keepEdits(Object.fromEntries(Object.entries(edits).filter(([p]) => !saved.has(p))));
+    if (saved.has(DATA_PATH)) store.set(`data.${loaded.folder}`, '');
+    const n = r.saved.length;
+    setNotice(
+      [
+        `${r.what} ${n} ${n === 1 ? 'file' : 'files'} in "${loaded.folder}".`,
+        r.backup ? `Backup: sidefin/backup/${r.backup}.` : 'No backup made.',
+        r.removed.length ? `${r.removed.length} older ${r.removed.length === 1 ? 'backup' : 'backups'} removed.` : '',
+        r.skipped.length ? `${r.skipped.length} skipped; those changes are still here, unsaved.` : '',
+        'Start Orca to use them.',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
+    run(async () => load(dir.name, await readFolder(dir), dir));
+  };
 
   const printers = useMemo(() => (baseline && loaded ? printerFamilies(baseline, presets) : []), [baseline, loaded, presets]);
   const printer = printers.find((p) => p.name === printerName) ?? printers[0];
@@ -263,7 +307,12 @@ export function App() {
             What changed in Orca
           </button>
         )}
-        {loaded && (
+        {loaded && loaded.dir && (
+          <button className="ghost" onClick={() => setShowBackups(true)} title="SideFin's backups in your Orca folder, with Restore">
+            Backups
+          </button>
+        )}
+        {loaded && !loaded.dir && (
           <button className="ghost" onClick={() => backup(loaded.files, loaded.folder)} title="Download all your presets, as they are in the folder, as a zip">
             Backup
           </button>
@@ -290,19 +339,29 @@ export function App() {
       />
 
       {error && <p className="error">{error}</p>}
+      {notice && (
+        <div className="notice" role="status">
+          <span>{notice}</span>
+          <button className="ghost" onClick={() => setNotice(undefined)} aria-label="Close">
+            ✕
+          </button>
+        </div>
+      )}
 
       {!loaded && (
         <section className="card start">
           <h1>See your Orca presets side by side</h1>
           <p>
-            SideFin shows every setting of your printer, filament and process presets, per nozzle, next to the default of your printer maker,
-            and marks where you differ.
+            SideFin shows every setting of your printer, filament and process presets, per nozzle, next to the default of your printer maker, and marks where
+            you differ.
           </p>
           <ol>
             <li>
               Choose your Orca data folder. In Orca: <b>Help → Show Configuration Folder</b> shows where it is.
             </li>
-            <li>SideFin reads the presets in its <code>user</code> folder, here in your browser. Nothing is uploaded.</li>
+            <li>
+              SideFin reads the presets in its <code>user</code> folder, here in your browser. Nothing is uploaded.
+            </li>
           </ol>
           <div className="actions">
             <button className="primary" onClick={pick} disabled={busy}>
@@ -332,14 +391,35 @@ export function App() {
           baseline={baseline}
           originals={loaded.presets}
           current={edits}
-          dataFile={dataChanged ? { path: DATA_PATH, text: dataJson(data), isNew: !dataRead.exists } : undefined}
+          dataFile={
+            dataChanged
+              ? {
+                  path: DATA_PATH,
+                  text: dataJson(data),
+                  isNew: !dataRead.exists,
+                }
+              : undefined
+          }
           canUndo={history.length > 0}
           onUndo={undo}
           onDiscard={discard}
+          dir={loaded.dir}
+          stamps={stamps}
+          onSaved={afterSave}
         />
       )}
       {loaded && baseline && loaded.presets.length > 0 && (
-        <Viewer baseline={baseline} previous={previous} presets={presets} printers={printer} changed={changed} originals={originals} onUpdate={update} data={data} onData={updateData} />
+        <Viewer
+          baseline={baseline}
+          previous={previous}
+          presets={presets}
+          printers={printer}
+          changed={changed}
+          originals={originals}
+          onUpdate={update}
+          data={data}
+          onData={updateData}
+        />
       )}
       {showUpdate && loaded && baseline && index && (
         <OrcaUpdateDialog
@@ -354,12 +434,21 @@ export function App() {
         />
       )}
 
+      {showBackups && loaded?.dir && (
+        <BackupsDialog
+          dir={loaded.dir}
+          unsaved={Object.keys(edits).length > 0 || dataChanged}
+          names={Object.fromEntries(loaded.presets.map((p) => [p.path, p.json.name]))}
+          onRestored={afterSave}
+          onDownload={() => backup(loaded.files, loaded.folder)}
+          onClose={() => setShowBackups(false)}
+        />
+      )}
+
       <footer>
         <span>SideFin {__APP_VERSION__}</span>
         {baseline && (
-          <span title={`${baseline.report.settings} settings, read from OrcaSlicer ${baseline.source.tag}`}>
-            Orca {baseline.orcaVersion} defaults
-          </span>
+          <span title={`${baseline.report.settings} settings, read from OrcaSlicer ${baseline.source.tag}`}>Orca {baseline.orcaVersion} defaults</span>
         )}
         {loaded && <span>{loaded.presets.length} presets read</span>}
         <a href={`${REPO}/issues/new?template=bug.yml`}>Report a bug</a>

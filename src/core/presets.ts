@@ -26,6 +26,7 @@ export function collectPresets(files: { path: string; text: string }[]): { prese
     if (!path.toLowerCase().endsWith('.json')) continue;
     const parts = path.split('/');
     if (parts.some((p) => /^(system|user_backup.*|log|cache|ota|plugins|printers|hms)$/i.test(p))) continue;
+    if (path.startsWith('sidefin/')) continue; // SideFin's own file and its backups
     let json: ProfileJson;
     try {
       json = JSON.parse(f.text);
