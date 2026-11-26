@@ -197,3 +197,18 @@ nav.pages .pgtab .wcnt { font-size: 11.5px; }
 tr.grp .grpbtn { border: 0; background: none; color: inherit; font: inherit; padding: 0; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
 tr.grp .caret { display: inline-block; width: 10px; color: var(--muted); }
 header .seg.theme button { padding: 3px 9px; font-size: 12.5px; }
+.tag { display: inline-block; font-size: 10.5px; border-radius: 999px; padding: 0 6px; margin-left: 6px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; font-weight: 500; vertical-align: 1px; }
+.tag.new { border-color: var(--noz); color: var(--noz); }
+.tag.old { border-color: var(--bad); color: var(--bad); }
+p.obsnote { margin: 4px 0 0; }
+dialog.orcaupd { width: min(980px, calc(100vw - 32px)); }
+dialog.orcaupd select { width: auto; }
+dialog.orcaupd details.updsec { border-top: 1px solid var(--line); padding: 8px 0; }
+dialog.orcaupd details.updsec summary { cursor: pointer; font-weight: 600; }
+dialog.orcaupd .cnt { margin-left: 6px; }
+dialog.orcaupd h4 { margin: 10px 0 4px; font-size: 13px; }
+dialog.orcaupd ul.cols { columns: 2; column-gap: 24px; margin: 0; padding-left: 18px; }
+dialog.orcaupd table.upd { border-collapse: collapse; width: 100%; margin: 6px 0; }
+dialog.orcaupd table.upd th { position: static; }
+dialog.orcaupd table.upd td { padding: 3px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+dialog.orcaupd table.upd td.v { font-family: var(--mono); font-size: 12px; max-width: 260px; overflow-wrap: anywhere; }

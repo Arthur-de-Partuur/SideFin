@@ -119,6 +119,7 @@ function ValueCell({
 
 export function Viewer({
   baseline,
+  previous,
   presets,
   printers,
   changed,
@@ -128,6 +129,8 @@ export function Viewer({
   onData,
 }: {
   baseline: Baseline;
+  /** Defaults of the Orca version before, for "new in" marks. */
+  previous?: Baseline;
   presets: PresetFile[];
   printers?: PrinterFamily;
   /** Settings changed in SideFin and not exported yet, per preset path. */
@@ -507,6 +510,11 @@ export function Viewer({
                   ))}
                 </nav>
               )}
+              {level !== 'all' && view.rows.some((r) => !r.def && r.cells.some((c) => c.own)) && (
+                <p className="small muted obsnote">
+                  This preset holds {view.rows.filter((r) => !r.def && r.cells.some((c) => c.own)).length} settings Orca {baseline.orcaVersion} does not know. Orca ignores them; level All shows them on the Other tab, and Export can remove them.
+                </p>
+              )}
               <div className="tablewrap">
                 <table>
                   <thead>
@@ -556,6 +564,16 @@ export function Viewer({
                                 </span>
                               )}
                               {r.nozzlesDiffer && view.columns.length > 1 && <i className="nzdot" title="The nozzles differ" />}
+                              {previous && r.def && !(r.key in previous.settings) && (
+                                <span className="tag new" title={`Orca ${previous.orcaVersion} did not have this setting`}>
+                                  new in {baseline.orcaVersion}
+                                </span>
+                              )}
+                              {!r.def && r.cells.some((c) => c.own) && (
+                                <span className="tag old" title="Orca ignores it. Export can remove it (checkbox in the Export dialog).">
+                                  unknown to Orca {baseline.orcaVersion}
+                                </span>
+                              )}
                               <div className="k">{r.key}</div>
                               {[...r.cells.map((c) => c.value), r.dflt?.value].some((v) => showValue(r.def, v).long) && (
                                 <MoreButton open={opened.has(r.key)} onToggle={() => toggleRow(r.key)} />

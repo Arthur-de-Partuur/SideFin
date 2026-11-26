@@ -47,7 +47,7 @@ compare two presets.
 | 2 | 0.2 | Viewer: three tabs, nozzle columns, printer maker's default, source, levels, search | G1, G2, G3, G6 |
 | 3 | 0.3 | Edit and export, value checks, backup, undo, CSV; cleanup that drops obsolete settings on export | G4 |
 | 4 | 0.4 | Manufacturer advice, calibration log, and calibration working (brought forward from step 6) | G7, G8 |
-| 5 | 0.5 | Orca update changes; per setting the Orca version it first appeared in, and obsolete settings marked | G5 |
+| 5 | 0.5 | Orca update changes: inherited values that changed, own values that are an old default, new settings marked, obsolete settings marked | G5 |
 | 6 | 0.6 | Calibration: more tests and methods (first part done in 0.4) | G7, G8 |
 | 7 | 1.0 | Save directly into the Orca data folder, with backup | G4 |
 
