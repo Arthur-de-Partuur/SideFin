@@ -2,13 +2,17 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
-## 0.4.0-dev.3 (2026-11-26)
+## 0.4.0 (2026-11-26)
+
+Manufacturer advice, calibration log and calibration working (G7, G8 brought forward from step 6). Built up in the dev versions below.
+
+### 0.4.0-dev.3
 
 - Hotend flow tester: SideFin now fills in every field of the tool's form, in the same order and with the same names: also bed margin, direction, travel speed, spacing, dwell, safe Z park and the test configuration (the tool's own defaults, marked as such). (G7, Arthur's request)
 - Start and end G-code for the flow tester are made from the printer preset's own start and end G-code, with a Copy button. Nozzle and bed temperatures become the tool's variables, so they follow its first temperature column; the print area (for example X0/Y0/X1/Y1 of RatRig's START_PRINT) is the bed inside the tool's margin; other placeholders get the value in effect from the presets. Placeholders SideFin cannot work out, such as conditions, are left as they are and named, to check by hand. (G7)
 - Flow rows and temperature columns now fit on the bed: when the rows at 2 mm³/s steps would not fit, the step grows. Before, a 300 mm bed could get 9 rows where 6 fit. (G7)
 
-## 0.4.0-dev.2 (2026-11-24)
+### 0.4.0-dev.2 (2026-11-24)
 
 Calibration working, brought forward from step 6 (G7, remark C3):
 
@@ -20,7 +24,7 @@ Calibration working, brought forward from step 6 (G7, remark C3):
 - "Value is OK" in the Calibration panel logs the value in the preset now as good, so that test is no longer due. (G7)
 - A link to the filament's brand and material on 3D Filament Profiles, next to "Find the data sheet". Its values are entered by users, and pages often link to the maker's site. SideFin only links to it: the site's terms do not allow copying its data into other tools. (G7, Arthur's suggestion)
 
-## 0.4.0-dev.1 (2026-11-24)
+### 0.4.0-dev.1 (2026-11-24)
 
 - SideFin keeps its own file in your Orca data folder: `sidefin/sidefin.json`, next to `user`. It holds what Orca has no place for: the filament maker's advice, the calibration log and the printer's hardware now. Orca's cache cleanup leaves it alone. It is exported with the presets. (G7, decision S1)
 - Filament tab: a "Manufacturer" line above the table and a "Manufacturer" column with the maker's advised values (temperatures, fan, max volumetric speed, density), the product name, a link to the data sheet and other advice such as drying. Click to add or change it. "Find the data sheet" opens a web search. (G2, G7, decision S2)
