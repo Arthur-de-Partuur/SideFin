@@ -2,6 +2,12 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.4.0-dev.3 (2026-11-26)
+
+- Hotend flow tester: SideFin now fills in every field of the tool's form, in the same order and with the same names: also bed margin, direction, travel speed, spacing, dwell, safe Z park and the test configuration (the tool's own defaults, marked as such). (G7, Arthur's request)
+- Start and end G-code for the flow tester are made from the printer preset's own start and end G-code, with a Copy button. Nozzle and bed temperatures become the tool's variables, so they follow its first temperature column; the print area (for example X0/Y0/X1/Y1 of RatRig's START_PRINT) is the bed inside the tool's margin; other placeholders get the value in effect from the presets. Placeholders SideFin cannot work out, such as conditions, are left as they are and named, to check by hand. (G7)
+- Flow rows and temperature columns now fit on the bed: when the rows at 2 mm³/s steps would not fit, the step grows. Before, a 300 mm bed could get 9 rows where 6 fit. (G7)
+
 ## 0.4.0-dev.2 (2026-11-24)
 
 Calibration working, brought forward from step 6 (G7, remark C3):

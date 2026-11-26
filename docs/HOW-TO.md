@@ -11,7 +11,7 @@
      - `edit.ts`: checking a typed value as Orca would, changing a preset, and writing it as Orca does (keys sorted, four spaces).
      - `export.ts`: the zip and CSV files the app hands you.
      - `sidefin.ts`: SideFin's own file `<data folder>/sidefin/sidefin.json` (maker's advice, calibration log, hardware) and which tests are due.
-     - `calibrate.ts`: the calibration methods (Orca, Ellis, hotend flow tester) and the values to type into each, worked out from the presets.
+     - `calibrate.ts`: the calibration methods (Orca, Ellis, hotend flow tester) and the values to type into each, worked out from the presets. For the hotend flow tester it also turns the printer's start and end G-code into the tool's `${variable}` form (`flowTesterGcode`).
    - `src/ui/`: the screens.
 2. **The defaults builder** (`scripts/baseline/`): reads OrcaSlicer's source for
    one release and writes `public/baseline/<version>.json`. That file holds:

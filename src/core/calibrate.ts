@@ -72,7 +72,8 @@ export const METHODS: Method[] = [
     label: 'Hotend flow tester',
     url: 'https://hotend-flow-tester.netlify.app/',
     steps: [
-      'Open the tool, enter the values below, download the G-code and print it.',
+      'Open the tool and enter the values below, from top to bottom in the order of its form. Copy the start and end G-code into "Start and End Gcode" (Advanced).',
+      'Check the preview, download the G-code and print it.',
       'Weigh or look at the blobs: pick the highest flow that still extrudes fully, and the temperature it was printed at.',
     ],
   },
@@ -106,6 +107,10 @@ export const fmt = (n: number) => String(Number(n.toFixed(4)));
 export interface SetupLine {
   label: string;
   value: string;
+  /** G-code to paste: shown in full with a Copy button. */
+  code?: boolean;
+  /** A short remark next to the value, such as "tool default". */
+  note?: string;
 }
 
 export interface SetupContext {
@@ -123,18 +128,50 @@ export function paRange(current: number | undefined, step: number): { start: num
   return { start, end: round(current + 0.03, 0.005), step };
 }
 
-/** Flow rows for the hotend flow tester, around the value now, in steps of 2 mm³/s. */
-export function flowRows(current: number | undefined): { start: number; offset: number; steps: number } {
+/** The hotend flow tester's own layout values, which SideFin keeps as they are. */
+export const FLOW_TESTER = {
+  bedMargin: 5,
+  safeZPark: 10,
+  travelSpeed: 100,
+  flowSpacing: 50,
+  tempSpacing: 38,
+  dwellTime: 20,
+  primeLength: 25,
+  primeAmount: 20,
+  primeSpeed: 5,
+  wipeLength: 15,
+  blobHeight: 10,
+  extrusionAmount: 200,
+};
+
+/** How many flow rows and temperature columns fit on the bed, as the flow tester works it out. */
+export function flowTesterFit(bed: { width: number; length: number } | undefined): { rows: number; columns: number } {
+  if (!bed) return { rows: Infinity, columns: 4 };
+  const t = FLOW_TESTER;
+  return {
+    rows: Math.max(1, Math.floor((bed.length - 2 * t.bedMargin + t.flowSpacing) / t.flowSpacing)),
+    columns: Math.max(1, Math.floor((bed.width - 2 * t.bedMargin + t.tempSpacing) / (t.primeLength + t.wipeLength + t.tempSpacing))),
+  };
+}
+
+/**
+ * Flow rows for the hotend flow tester, around the value now, in steps of 2 mm³/s.
+ * When that needs more rows than fit on the bed, the step grows instead.
+ */
+export function flowRows(current: number | undefined, maxRows = Infinity): { start: number; offset: number; steps: number } {
   const c = current && current > 0 ? current : 15;
   const start = Math.max(2, round(c * 0.6, 2));
   const end = round(c * 1.4, 2);
-  return { start, offset: 2, steps: Math.max(2, Math.round((end - start) / 2) + 1) };
+  let offset = 2;
+  if (maxRows >= 2 && Math.round((end - start) / offset) + 1 > maxRows) offset = Math.ceil((end - start) / (maxRows - 1));
+  const steps = Math.max(2, Math.round((end - start) / offset) + 1);
+  return { start, offset, steps: Math.min(steps, Math.max(2, maxRows)) };
 }
 
-/** Temperature columns over the filament's range, at most 4. */
-export function tempColumns(low: number | undefined, high: number | undefined, now: number | undefined): { start: number; offset: number; steps: number } {
+/** Temperature columns over the filament's range, at most 4 (fewer when the bed is small). */
+export function tempColumns(low: number | undefined, high: number | undefined, now: number | undefined, maxColumns = 4): { start: number; offset: number; steps: number } {
   if (low === undefined || high === undefined || high <= low) return { start: now ?? 220, offset: 10, steps: 1 };
-  const steps = Math.min(4, Math.floor((high - low) / 10) + 1);
+  const steps = Math.min(4, maxColumns, Math.floor((high - low) / 10) + 1);
   if (steps === 1) return { start: now ?? low, offset: 10, steps: 1 };
   const offset = steps > 1 ? round((high - low) / (steps - 1), 5) : 10;
   return { start: low, offset, steps };
@@ -149,13 +186,77 @@ export function emSeries(current: number | undefined): number[] {
 /** New flow ratio from Orca's flow rate test: the value now times (100 + modifier) / 100. */
 export const orcaFlowRatio = (current: number, modifier: number) => Number(((current * (100 + modifier)) / 100).toFixed(4));
 
+const TEMP_KEYS = new Set(['nozzle_temperature_initial_layer', 'nozzle_temperature', 'first_layer_temperature', 'temperature']);
+const TOOL_KEYS = new Set(['initial_extruder', 'initial_tool', 'current_extruder', 'current_tool']);
+
+/** An Orca index such as [0] or [initial_tool]: the first extruder. */
+const indexOf = (ix: string | undefined) => (ix === undefined || TOOL_KEYS.has(ix) ? 0 : /^\d+$/.test(ix) ? Number(ix) : undefined);
+
+/**
+ * Turn the printer's start or end G-code into G-code for the hotend flow tester.
+ * Nozzle and bed temperatures become the tester's own variables, so they follow
+ * its first temperature column. The print area is the bed inside the tester's
+ * margin. Other placeholders take the value in effect from the presets.
+ * Placeholders SideFin cannot work out (conditions, expressions) are left as
+ * they are and listed, to check by hand.
+ */
+export function flowTesterGcode(
+  template: string,
+  values: Record<string, OrcaValue | undefined>,
+): { gcode: string; unresolved: string[] } {
+  const unresolved: string[] = [];
+  const resolveKey = (key: string, ix: string | undefined): string | undefined => {
+    if (TEMP_KEYS.has(key)) return '${tempStart}';
+    if (/bed_temperature|plate_temp/.test(key)) return '${bedTemp}';
+    if (TOOL_KEYS.has(key)) return '0';
+    if (key === 'total_layer_count') return '1';
+    if (key === 'first_layer_print_min' || key === 'first_layer_print_max') {
+      const axis = ix === '0' ? 'X' : ix === '1' ? 'Y' : undefined;
+      if (!axis) return undefined;
+      if (key === 'first_layer_print_min') return '${bedMargin}';
+      return axis === 'X' ? '${bedWidth - bedMargin}' : '${bedLength - bedMargin}';
+    }
+    const v = values[key];
+    if (v === undefined || v === null) return undefined;
+    const i = indexOf(ix);
+    if (i === undefined) return undefined;
+    const x = Array.isArray(v) ? v[i] ?? v[0] : v;
+    if (x === undefined || x === null || x === 'nil' || /[\n{}]/.test(String(x))) return undefined;
+    return String(x);
+  };
+  const gcode = template.replace(/\[([a-z_][a-z0-9_]*)\]|\{([^{}]*)\}/gi, (whole, legacy: string | undefined, expr: string | undefined) => {
+    let out: string | undefined;
+    if (legacy) out = resolveKey(legacy, undefined);
+    else {
+      const m = /^\s*([a-z_][a-z0-9_]*)\s*(?:\[\s*([a-z0-9_]+)\s*\])?\s*$/i.exec(expr ?? '');
+      if (m) out = resolveKey(m[1], m[2]);
+    }
+    if (out === undefined) {
+      if (!unresolved.includes(whole)) unresolved.push(whole);
+      return whole;
+    }
+    return out;
+  });
+  return { gcode, unresolved };
+}
+
 /** What to set up for a test with one method, from the presets. */
 export function setup(method: Method, ctx: SetupContext): SetupLine[] {
   const f = ctx.filament;
   const p = ctx.printer;
   const lines: SetupLine[] = [];
-  const add = (label: string, v: string | number | undefined, unit = '') => {
-    if (v !== undefined && v !== '') lines.push({ label, value: `${typeof v === 'number' ? fmt(v) : v}${unit}` });
+  const add = (label: string, v: string | number | undefined, unit = '', note?: string) => {
+    if (v !== undefined && v !== '') lines.push({ label, value: `${typeof v === 'number' ? fmt(v) : v}${unit}`, ...(note ? { note } : {}) });
+  };
+  const addCode = (label: string, template: OrcaValue | undefined) => {
+    if (typeof template !== 'string' || !template.trim()) return;
+    const { gcode, unresolved } = flowTesterGcode(template, { ...p, ...f });
+    lines.push({
+      label,
+      value: gcode,
+      code: true,
+      note: unresolved.length ? `Check by hand: SideFin cannot fill in ${unresolved.join(', ')}.` : `From the printer preset; temperatures follow the test.`,
+    });
   };
   const nozzleTemp = num(f.nozzle_temperature);
   const low = num(f.nozzle_temperature_range_low);
@@ -210,20 +311,40 @@ export function setup(method: Method, ctx: SetupContext): SetupLine[] {
       break;
     }
     case 'flow-tester': {
-      const rows = flowRows(num(f.filament_max_volumetric_speed));
-      const cols = tempColumns(low, high, nozzleTemp);
-      add('Bed width / length', bed ? `${bed.width} / ${bed.length} mm` : undefined);
-      add('Filament diameter', num(f.filament_diameter) !== undefined && num(f.filament_diameter)! > 2.2 ? '2.85mm' : '1.75mm');
-      add('Bed temperature', bedTemp, ' °C');
-      add('Fan speed', 0, '%');
-      add('Retraction distance', retLen, ' mm');
-      add('Retraction speed', retSpeed, ' mm/s');
-      add('Start flow', rows.start, ' mm³/s');
-      add('Offset flow', rows.offset, ' mm³/s');
-      add('Flow steps', rows.steps);
-      add('Start temperature', cols.start, ' °C');
-      add('Offset temperature', cols.offset, ' °C');
-      add('Temperature steps', cols.steps);
+      const t = FLOW_TESTER;
+      const fit = flowTesterFit(bed);
+      const rows = flowRows(num(f.filament_max_volumetric_speed), fit.rows);
+      const cols = tempColumns(low, high, nozzleTemp, fit.columns);
+      const tool = 'tool default';
+      // In the order of the tool's form.
+      add('Bed Width', bed?.width, ' mm');
+      add('Bed Length', bed?.length, ' mm');
+      add('Bed Margin', t.bedMargin, ' mm', tool);
+      add('Generation Direction', 'Front to Back', '', tool);
+      add('Filament Diameter', num(f.filament_diameter) !== undefined && num(f.filament_diameter)! > 2.2 ? '2.85mm' : '1.75mm');
+      add('Travel Speed', t.travelSpeed, ' mm/s', tool);
+      add('Bed Temperature', bedTemp, ' °C');
+      add('Fan Speed', 0, '%', 'off for the blobs');
+      add('Retraction Distance', retLen, ' mm');
+      add('Retraction Speed', retSpeed, ' mm/s');
+      add('Flow Spacing', t.flowSpacing, ' mm', tool);
+      add('Temperature Spacing', t.tempSpacing, ' mm', tool);
+      add('Dwell Time', t.dwellTime, ' s', tool);
+      add('Start Flow', rows.start, ' mm³/s');
+      add('Offset Flow', rows.offset, ' mm³/s', rows.offset > 2 ? 'larger steps, so all rows fit on the bed' : undefined);
+      add('Flow Steps', rows.steps, '', `ends at ${fmt(rows.start + (rows.steps - 1) * rows.offset)} mm³/s`);
+      add('Start Temperature', cols.start, ' °C');
+      add('Offset Temperature', cols.offset, ' °C');
+      add('Temperature Steps', cols.steps, '', cols.steps > 1 ? `ends at ${fmt(cols.start + (cols.steps - 1) * cols.offset)} °C` : undefined);
+      add('Safe Z Park Height', t.safeZPark, ' mm', tool);
+      addCode('Start Gcode', p.machine_start_gcode);
+      addCode('End Gcode', p.machine_end_gcode);
+      add('Prime Line Length', t.primeLength, ' mm', tool);
+      add('Prime Amount', t.primeAmount, ' mm', tool);
+      add('Prime Speed', t.primeSpeed, ' mm/s', tool);
+      add('Wipe Length', t.wipeLength, ' mm', tool);
+      add('Blob Height', t.blobHeight, ' mm', tool);
+      add('Extrusion Amount', t.extrusionAmount, ' mm', tool);
       break;
     }
   }

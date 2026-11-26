@@ -283,6 +283,28 @@ export function CalibrationPanel({
   );
 }
 
+/** Copies a text, such as G-code, and says so for a moment. */
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className="linkbtn small"
+      onClick={() =>
+        navigator.clipboard?.writeText(text).then(
+          () => {
+            setDone(true);
+            setTimeout(() => setDone(false), 1500);
+          },
+          () => undefined,
+        )
+      }
+    >
+      {done ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 /**
  * Calibrate one test on one nozzle: pick a method, see what to set up in
  * Orca or the outside tool, then enter the result. Saving logs it, and can
@@ -380,12 +402,26 @@ export function CalibrateDialog({
       {lines.length > 0 && (
         <table className="setup small">
           <tbody>
-            {lines.map((l) => (
-              <tr key={l.label}>
-                <td className="muted">{l.label}</td>
-                <td className="v">{l.value}</td>
-              </tr>
-            ))}
+            {lines.map((l) =>
+              l.code ? (
+                <tr key={l.label}>
+                  <td className="muted">{l.label}</td>
+                  <td>
+                    <pre className="code">{l.value}</pre>
+                    <CopyButton text={l.value} />
+                    {l.note && <span className="muted note"> {l.note}</span>}
+                  </td>
+                </tr>
+              ) : (
+                <tr key={l.label}>
+                  <td className="muted">{l.label}</td>
+                  <td>
+                    <span className="v">{l.value}</span>
+                    {l.note && <span className="muted note"> · {l.note}</span>}
+                  </td>
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
       )}

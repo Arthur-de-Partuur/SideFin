@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bedSize, emSeries, flowRows, methodById, orcaFlowRatio, paRange, setup, tempColumns } from './calibrate';
+import { bedSize, emSeries, flowRows, flowTesterFit, flowTesterGcode, methodById, orcaFlowRatio, paRange, setup, tempColumns } from './calibrate';
 import { lastMethod, type SideFinData } from './sidefin';
 
 const filament = {
@@ -15,7 +15,15 @@ const filament = {
   filament_flow_ratio: ['0.98'],
   filament_max_volumetric_speed: ['20'],
 };
-const printer = { printable_area: ['0x0', '300x0', '300x300', '0x300'], gcode_flavor: 'klipper', retraction_length: ['0.5'], retraction_speed: ['40'] };
+const printer = {
+  printable_area: ['0x0', '300x0', '300x300', '0x300'],
+  gcode_flavor: 'klipper',
+  retraction_length: ['0.5'],
+  retraction_speed: ['40'],
+  machine_start_gcode:
+    'START_PRINT EXTRUDER_TEMP=[nozzle_temperature_initial_layer] EXTRUDER_OTHER_LAYER_TEMP=[nozzle_temperature] BED_TEMP=[bed_temperature_initial_layer_single] TOTAL_LAYER_COUNT={total_layer_count} X0={first_layer_print_min[0]} Y0={first_layer_print_min[1]} X1={first_layer_print_max[0]} Y1={first_layer_print_max[1]}',
+  machine_end_gcode: 'END_PRINT',
+};
 
 describe('calibration setup', () => {
   it('reads the bed size', () => {
@@ -43,10 +51,36 @@ describe('calibration setup', () => {
 
   it('lists what to type into the flow tester, with the printer retraction when the filament has none', () => {
     const lines = Object.fromEntries(setup(methodById('flow-tester')!, { nozzle: '0.4', filament, printer }).map((l) => [l.label, l.value]));
-    expect(lines['Bed width / length']).toBe('300 / 300 mm');
-    expect(lines['Retraction distance']).toBe('0.5 mm');
-    expect(lines['Start flow']).toBe('12 mm³/s');
-    expect(lines['Start temperature']).toBe('230 °C');
+    expect(lines['Bed Width']).toBe('300 mm');
+    expect(lines['Bed Length']).toBe('300 mm');
+    expect(lines['Retraction Distance']).toBe('0.5 mm');
+    expect(lines['Start Flow']).toBe('12 mm³/s');
+    expect(lines['Start Temperature']).toBe('230 °C');
+    expect(lines['Bed Temperature']).toBe('80 °C');
+    expect(lines['End Gcode']).toBe('END_PRINT');
+    expect(lines['Start Gcode']).toBe(
+      'START_PRINT EXTRUDER_TEMP=${tempStart} EXTRUDER_OTHER_LAYER_TEMP=${tempStart} BED_TEMP=${bedTemp} TOTAL_LAYER_COUNT=1 X0=${bedMargin} Y0=${bedMargin} X1=${bedWidth - bedMargin} Y1=${bedLength - bedMargin}',
+    );
+  });
+
+  it('fits the flow rows and temperature columns on the bed', () => {
+    expect(flowTesterFit({ width: 300, length: 300 })).toEqual({ rows: 6, columns: 4 });
+    expect(flowTesterFit({ width: 200, length: 200 })).toEqual({ rows: 4, columns: 2 });
+    // 12 to 28 in steps of 2 is 9 rows; 6 fit, so the step grows to 4.
+    expect(flowRows(20, 6)).toEqual({ start: 12, offset: 4, steps: 5 });
+    expect(tempColumns(230, 260, 245, 2)).toEqual({ start: 230, offset: 30, steps: 2 });
+    const lines = Object.fromEntries(setup(methodById('flow-tester')!, { nozzle: '0.4', filament, printer }).map((l) => [l.label, l.value]));
+    expect(lines['Offset Flow']).toBe('4 mm³/s');
+    expect(lines['Flow Steps']).toBe('5');
+  });
+
+  it('turns Orca placeholders into flow tester G-code', () => {
+    const values = { filament_type: ['PETG'], nozzle_diameter: ['0.4', '0.6'] };
+    expect(flowTesterGcode('M190 S{bed_temperature[initial_extruder]}\nM109 S{nozzle_temperature[0]}', values).gcode).toBe('M190 S${bedTemp}\nM109 S${tempStart}');
+    expect(flowTesterGcode('; {filament_type[initial_tool]} [nozzle_diameter]', values).gcode).toBe('; PETG 0.4');
+    const odd = flowTesterGcode('{if layer_num == 0}G1{endif} L={layer_num + 1} {unknown_key}', values);
+    expect(odd.unresolved).toEqual(['{if layer_num == 0}', '{endif}', '{layer_num + 1}', '{unknown_key}']);
+    expect(odd.gcode).toBe('{if layer_num == 0}G1{endif} L={layer_num + 1} {unknown_key}');
   });
 
   it('names the firmware for the PA tool', () => {

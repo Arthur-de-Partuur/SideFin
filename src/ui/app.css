@@ -176,5 +176,8 @@ dialog.calibrate .methods { display: flex; flex-wrap: wrap; gap: 4px 16px; margi
 dialog.calibrate ol.steps { margin: 6px 0 8px; padding-left: 20px; }
 dialog.calibrate table.setup { border-collapse: collapse; margin: 4px 0 6px; }
 dialog.calibrate table.setup td { padding: 2px 14px 2px 0; border-bottom: 1px solid var(--line); }
-dialog.calibrate table.setup td.v { font-family: var(--mono); user-select: all; }
+dialog.calibrate table.setup td { vertical-align: top; }
+dialog.calibrate table.setup .v { font-family: var(--mono); user-select: all; }
+dialog.calibrate table.setup .note { font-size: 0.9em; }
+dialog.calibrate table.setup pre.code { font-family: var(--mono); font-size: 0.9em; white-space: pre-wrap; word-break: break-all; margin: 2px 0; padding: 4px 6px; background: var(--surface-2); border-radius: 4px; max-height: 12em; overflow: auto; user-select: all; }
 dialog.calibrate .fields .lbl { min-width: 150px; }
