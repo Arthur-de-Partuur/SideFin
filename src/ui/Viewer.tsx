@@ -5,6 +5,8 @@ import { warningFor } from '../core/warnings';
 import type { PresetFile } from '../core/presets';
 import { download } from './download';
 import { Editor, type EditTarget } from './Editor';
+import { AdviceDialog, adviceFor, CalibrateDialog, CalibrationPanel, ManufacturerBar } from './Filament';
+import { dueList, TESTS, type Calibration, type CalibrationTest, type SideFinData } from '../core/sidefin';
 import {
   buildRows,
   columnsFor,
@@ -120,6 +122,8 @@ export function Viewer({
   changed,
   originals,
   onUpdate,
+  data,
+  onData,
 }: {
   baseline: Baseline;
   presets: PresetFile[];
@@ -128,7 +132,11 @@ export function Viewer({
   changed: Record<string, string[]>;
   /** The presets as read from the folder, by path, before any change. */
   originals: Record<string, ProfileJson>;
-  onUpdate: (changes: { file: PresetFile; json: ProfileJson }[]) => void;
+  /** Change presets; with data, the calibration log changes in the same Undo step. */
+  onUpdate: (changes: { file: PresetFile; json: ProfileJson }[], data?: SideFinData) => void;
+  /** SideFin's own file: manufacturer advice, calibration log, hardware. */
+  data: SideFinData;
+  onData: (next: SideFinData) => void;
 }) {
   const [editing, setEditing] = useState<EditTarget>();
   const allNozzles = useMemo(() => (printers?.printers.map((p) => p.nozzle).filter((n): n is string => !!n) ?? []), [printers]);
@@ -206,6 +214,47 @@ export function Viewer({
     const columns = all.columns.filter(visible);
     return { columns, dflt: all.dflt, parents: all.parents, rows: buildRows(baseline, kind, columns, all.dflt, isExplained) };
   }, [family, baseline, presets, printers, kind, hidden, typeMode, isExplained]);
+  const filamentView = kind === 'filament' && !typeMode && !!view && !!family;
+  const advice = filamentView ? data.advice[family!.name] : undefined;
+  const vendorValue = view?.columns[0]?.resolved.values.filament_vendor?.value;
+  const vendor = Array.isArray(vendorValue) ? vendorValue[0] : vendorValue;
+  const typeValue = view?.columns[0]?.resolved.values.filament_type?.value;
+  const ftype = Array.isArray(typeValue) ? typeValue[0] : typeValue;
+  const [adviceOpen, setAdviceOpen] = useState(false);
+  const due = useMemo(
+    () =>
+      kind === 'filament'
+        ? dueList(
+            data,
+            families(presets, 'filament', printers).map((f) => ({ name: f.name, nozzles: f.members.map((m) => m.nozzle) })),
+          )
+        : [],
+    [kind, data, presets, printers],
+  );
+  const dueCount = useMemo(() => {
+    const n: Record<string, number> = {};
+    for (const d of due) n[d.filament] = (n[d.filament] ?? 0) + 1;
+    return n;
+  }, [due]);
+  const [onlyDue, setOnlyDue] = useState(false);
+  const [calibrating, setCalibrating] = useState<{ test: CalibrationTest; column: Column }>();
+  const printerValues = (nozzle?: string) => {
+    const p = printers?.printers.find((x) => x.nozzle !== undefined && nozzle !== undefined && Number(x.nozzle) === Number(nozzle)) ?? printers?.printers[0];
+    return Object.fromEntries(Object.entries(p?.resolved.values ?? {}).map(([k, v]) => [k, v.value]));
+  };
+  const saveCalibration = (entry: Calibration, apply: boolean) => {
+    if (!calibrating) return;
+    const nextData = { ...data, calibrations: [...data.calibrations, entry] };
+    const col = calibrating.column;
+    const key = TESTS.find((t) => t.test === entry.test)!.key;
+    if (apply && col.file && entry.value !== undefined) {
+      const shown = col.resolved.values[key]?.value ?? baseline.settings[key]?.default;
+      const items = Array.isArray(shown) && shown.length > 1 ? shown.map(() => entry.value!) : [entry.value];
+      onUpdate([{ file: col.file, json: setValue(col.file.json, key, items, shown, sliceOf(col, key)) }], nextData);
+    } else onData(nextData);
+    setCalibrating(undefined);
+  };
+  const showDue = kind === 'filament' && !typeMode;
   const rows = view ? filterRows(view.rows, { level, onlyDiffers, onlyNozzlesDiffer: onlyNozzles, onlyWarnings, search }) : [];
   const warnCount = view ? countWarnings(filterRows(view.rows, { level })) : 0;
 
@@ -326,10 +375,23 @@ export function Viewer({
           <div className="lbl">
             {TABS.find((t) => t.kind === kind)?.label} presets{printers ? ` · ${printers.name}` : ''}
           </div>
+          {showDue && due.length > 0 && (
+            <label className="check small onlydue">
+              <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} />
+              Only filaments to calibrate
+            </label>
+          )}
           {fams.length === 0 && <p className="muted small">None found for this printer.</p>}
-          {fams.map((f) => (
+          {fams.filter((f) => !(showDue && onlyDue) || dueCount[f.name]).map((f) => (
             <button key={f.name} className={`fam${f === family ? ' on' : ''}`} onClick={() => setPicked({ ...picked, [pickKey]: f.name })}>
-              <span>{f.name}</span>
+              <span>
+                {f.name}
+                {showDue && dueCount[f.name] > 0 && (
+                  <span className="tocal" title="Pressure advance or max flow tests not done yet, or done on other hardware">
+                    {dueCount[f.name]} to calibrate
+                  </span>
+                )}
+              </span>
               <span className="cnts">
                 {counts[f.name]?.warnings > 0 && (
                   <span className="wcnt" title="Settings with a warning (line width or temperature)">
@@ -387,6 +449,19 @@ export function Viewer({
                 </details>
               )}
 
+              {filamentView && (
+                <>
+                  <ManufacturerBar advice={advice} vendor={vendor} type={ftype} filament={family!.name} onEdit={() => setAdviceOpen(true)} />
+                  <CalibrationPanel
+                    filament={family!.name}
+                    columns={view!.columns}
+                    data={data}
+                    onHardware={(hardware) => onData({ ...data, hardware })}
+                    onLog={(c) => onData({ ...data, calibrations: [...data.calibrations, c] })}
+                    onCalibrate={(test, column) => setCalibrating({ test, column })}
+                  />
+                </>
+              )}
               <div className="tablewrap">
                 <table>
                   <thead>
@@ -398,12 +473,13 @@ export function Viewer({
                         </th>
                       ))}
                       <th title={view.dflt?.name}>{defaultLabel(view.dflt)}</th>
+                      {filamentView && <th title={advice?.product}>Manufacturer</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {rows.length === 0 && (
                       <tr>
-                        <td colSpan={view.columns.length + 2} className="muted">
+                        <td colSpan={view.columns.length + (filamentView ? 3 : 2)} className="muted">
                           No settings match. Try another level or turn off a filter.
                         </td>
                       </tr>
@@ -416,7 +492,7 @@ export function Viewer({
                         <Fragment key={r.key}>
                           {showHead && (
                             <tr className="grp">
-                              <td colSpan={view.columns.length + 2}>{head}</td>
+                              <td colSpan={view.columns.length + (filamentView ? 3 : 2)}>{head}</td>
                             </tr>
                           )}
                           <tr>
@@ -459,6 +535,11 @@ export function Viewer({
                               extra={`dflt${r.dflt?.origin === 'default' ? ' builtin-d' : ''}`}
                               note={r.dflt?.origin === 'default' ? "Orca's built-in default: no RatRig or Orca profile sets this" : r.dflt ? `From "${r.dflt.from}"` : undefined}
                             />
+                            {filamentView && (
+                              <td className="v mf editable" title={advice?.source ? `From ${advice.source}\nClick to change.` : 'Click to add the maker\'s advice.'} onClick={() => setAdviceOpen(true)}>
+                                {adviceFor(advice, r.key) ?? ''}
+                              </td>
+                            )}
                           </tr>
                         </Fragment>
                       );
@@ -490,6 +571,35 @@ export function Viewer({
           )}
         </main>
       </div>
+      {calibrating && family && (
+        <CalibrateDialog
+          filament={family.name}
+          test={calibrating.test}
+          column={calibrating.column}
+          printer={printerValues(calibrating.column.nozzle)}
+          data={data}
+          def={baseline.settings[TESTS.find((t) => t.test === calibrating.test)!.key]}
+          canApply={!!calibrating.column.file}
+          onSave={saveCalibration}
+          onClose={() => setCalibrating(undefined)}
+        />
+      )}
+      {adviceOpen && family && (
+        <AdviceDialog
+          filament={family.name}
+          vendor={vendor}
+          type={ftype}
+          advice={advice}
+          onClose={() => setAdviceOpen(false)}
+          onSave={(a) => {
+            const next = { ...data.advice };
+            if (a) next[family.name] = a;
+            else delete next[family.name];
+            onData({ ...data, advice: next });
+            setAdviceOpen(false);
+          }}
+        />
+      )}
       {editing && <Editor key={`${editing.column.name}|${editing.key}`} target={editing} onSave={saveEdit} onClear={clearEdit} onClose={() => setEditing(undefined)} />}
     </div>
   );

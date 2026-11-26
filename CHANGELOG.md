@@ -2,6 +2,36 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.4.0 (2026-11-26)
+
+Manufacturer advice, calibration log and calibration working (G7, G8 brought forward from step 6). Built up in the dev versions below.
+
+### 0.4.0-dev.3
+
+- Hotend flow tester: SideFin now fills in every field of the tool's form, in the same order and with the same names: also bed margin, direction, travel speed, spacing, dwell, safe Z park and the test configuration (the tool's own defaults, marked as such). (G7, Arthur's request)
+- Start and end G-code for the flow tester are made from the printer preset's own start and end G-code, with a Copy button. Nozzle and bed temperatures become the tool's variables, so they follow its first temperature column; the print area (for example X0/Y0/X1/Y1 of RatRig's START_PRINT) is the bed inside the tool's margin; other placeholders get the value in effect from the presets. Placeholders SideFin cannot work out, such as conditions, are left as they are and named, to check by hand. (G7)
+- Flow rows and temperature columns now fit on the bed: when the rows at 2 mm³/s steps would not fit, the step grows. Before, a 300 mm bed could get 9 rows where 6 fit. (G7)
+
+### 0.4.0-dev.2 (2026-11-24)
+
+Calibration working, brought forward from step 6 (G7, remark C3):
+
+- "Calibrate" for each test and nozzle in the Calibration panel. Pick a method: Orca's own test, Ellis' PA tool, Ellis' extrusion multiplier cubes, or the hotend flow tester. SideFin shows the steps, a link to the tool, and the values to type in, taken from your presets (bed size, temperatures, fan, retraction, and a range around the value now). The method you used last is picked first.
+- Enter the result (for max flow, also the nozzle temperature), the date, and a note. Saving adds it to the calibration log with your hardware now, and can set it in the preset for that nozzle. One Undo takes both back.
+- Extrusion multiplier (flow ratio) is a third test, after pressure advance. For Orca's flow ratio test you can enter the block modifier, and SideFin works out the ratio.
+
+- Calibration is shown more calmly (remarks C1, C2): the "Due for calibration" list is gone; each filament shows a small grey "N to calibrate", the details stay in its Calibration panel, and a filter shows only filaments to calibrate. (G7)
+- "Value is OK" in the Calibration panel logs the value in the preset now as good, so that test is no longer due. (G7)
+- A link to the filament's brand and material on 3D Filament Profiles, next to "Find the data sheet". Its values are entered by users, and pages often link to the maker's site. SideFin only links to it: the site's terms do not allow copying its data into other tools. (G7, Arthur's suggestion)
+
+### 0.4.0-dev.1 (2026-11-24)
+
+- SideFin keeps its own file in your Orca data folder: `sidefin/sidefin.json`, next to `user`. It holds what Orca has no place for: the filament maker's advice, the calibration log and the printer's hardware now. Orca's cache cleanup leaves it alone. It is exported with the presets. (G7, decision S1)
+- Filament tab: a "Manufacturer" line above the table and a "Manufacturer" column with the maker's advised values (temperatures, fan, max volumetric speed, density), the product name, a link to the data sheet and other advice such as drying. Click to add or change it. "Find the data sheet" opens a web search. (G2, G7, decision S2)
+- Calibration panel per filament: pressure advance and max volumetric speed for each nozzle, with the value in the preset now and the date of the last test from the log. Tests done on other hardware are marked. Running and logging tests comes in 0.6. (G7, decision S3)
+- "Due for calibration" in the side bar: filaments and nozzles with no test yet, or a test on other hardware. Click one to open it. (G7)
+- Undo and Discard also cover the advice, log and hardware.
+
 ## 0.3.0 (2026-11-24)
 
 - Click a value of your preset to change it: a number field, yes/no, a list of choices or a text box for G-code. Each change can be undone, and "Back to inherited" removes the preset's own value. (G4)
