@@ -2,6 +2,17 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.5.0-dev.1 (2026-11-26)
+
+Step 5: what an Orca update changes (G5, P5).
+
+- "What changed in Orca" (top bar): pick the Orca version you came from; SideFin compares your presets under both versions, for the chosen printer. (G5)
+  - Changed without you touching it: values your presets inherit that are different in the new version. "Pin the old value" keeps printing as before, per row or all at once.
+  - Your value is the old default: values your preset sets to what was the default, where the default changed (common in flat presets that copy every value). "Take the new default", per row or all at once. Values you changed in SideFin count as your choice and are left out.
+  - New settings in the new version, per tab, with where Orca shows them.
+  - Settings the new version no longer knows, per preset (Export can remove them).
+- In the table, settings new in this Orca version are marked "new in 2.5.2", and settings Orca does not know are marked "unknown to Orca"; a note says when a preset holds such settings at levels Simple and Advanced. (G5)
+
 ## 0.4.1 (2026-11-26)
 
 Orca's pages as tabs and a light/dark switch.

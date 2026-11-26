@@ -5,6 +5,8 @@ import { DATA_PATH, dataJson, parseData, type SideFinData } from '../core/sidefi
 import { printerFamilies } from '../core/table';
 import type { Baseline, BaselineIndex, ProfileJson } from '../core/types';
 import { isNewer, onlineVersion } from '../core/update';
+import { olderVersions } from '../core/orcaUpdate';
+import { OrcaUpdateDialog } from './OrcaUpdate';
 import { allowRead, canPickFolder, readFileList, readFolder, rememberedFolder, rememberFolder, type FolderFile } from './folder';
 import { backup, Changes } from './Changes';
 import { Logo } from './Logo';
@@ -47,6 +49,10 @@ export function App() {
   const [index, setIndex] = useState<BaselineIndex>();
   const [orca, setOrca] = useState<string | undefined>(store.get('orca'));
   const [baseline, setBaseline] = useState<Baseline>();
+  // Defaults of other Orca versions, loaded when needed (What changed, "new in" marks).
+  const cache = useRef<Record<string, Promise<Baseline>>>({});
+  const [previous, setPrevious] = useState<Baseline>();
+  const [showUpdate, setShowUpdate] = useState(false);
   const [error, setError] = useState<string>();
   const [newer, setNewer] = useState<string>();
   const [loaded, setLoaded] = useState<Loaded>();
@@ -69,6 +75,13 @@ export function App() {
     if (folder) store.set(`data.${folder}`, dataJson(next));
   };
 
+  const loadVersion = (version: string): Promise<Baseline> => {
+    const file = index?.versions.find((v) => v.orcaVersion === version)?.file;
+    if (!file) return Promise.reject(new Error(`no defaults for Orca ${version}`));
+    cache.current[version] ??= fetch(`${BASE}baseline/${file}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
+    return cache.current[version];
+  };
+
   useEffect(() => {
     fetch(`${BASE}baseline/index.json`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -87,8 +100,15 @@ export function App() {
     setBaseline(undefined);
     fetch(`${BASE}baseline/${file}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setBaseline)
+      .then((b: Baseline) => {
+        cache.current[orca] = Promise.resolve(b);
+        setBaseline(b);
+      })
       .catch((e) => setError(`Could not load the Orca ${orca} defaults (${e.message}).`));
+    // The version before it, for "new in" marks in the table.
+    const prev = olderVersions(index!.versions.map((v) => v.orcaVersion), orca)[0];
+    setPrevious(undefined);
+    if (prev) loadVersion(prev).then(setPrevious, () => undefined);
   }, [index, orca]);
 
   useEffect(() => {
@@ -238,6 +258,11 @@ export function App() {
             </select>
           </label>
         )}
+        {loaded && baseline && index && index.versions.length > 1 && (
+          <button className="ghost" onClick={() => setShowUpdate(true)} title="What an Orca update changes for your presets">
+            What changed in Orca
+          </button>
+        )}
         {loaded && (
           <button className="ghost" onClick={() => backup(loaded.files, loaded.folder)} title="Download all your presets, as they are in the folder, as a zip">
             Backup
@@ -314,7 +339,19 @@ export function App() {
         />
       )}
       {loaded && baseline && loaded.presets.length > 0 && (
-        <Viewer baseline={baseline} presets={presets} printers={printer} changed={changed} originals={originals} onUpdate={update} data={data} onData={updateData} />
+        <Viewer baseline={baseline} previous={previous} presets={presets} printers={printer} changed={changed} originals={originals} onUpdate={update} data={data} onData={updateData} />
+      )}
+      {showUpdate && loaded && baseline && index && (
+        <OrcaUpdateDialog
+          versions={index.versions.map((v) => v.orcaVersion)}
+          baseline={baseline}
+          load={loadVersion}
+          presets={presets}
+          printerName={printer?.name}
+          changed={changed}
+          onUpdate={(c) => update(c)}
+          onClose={() => setShowUpdate(false)}
+        />
       )}
 
       <footer>
