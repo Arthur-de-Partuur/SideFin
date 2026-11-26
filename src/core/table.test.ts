@@ -103,4 +103,15 @@ describe('Orca pages', () => {
     const list = pages([row('a', 'Filament'), row('b', 'Cooling'), row('c', 'Advanced'), row('d', 'Setting Overrides')], []);
     expect(list.map((p) => p.page)).toEqual(['Filament', 'Cooling', 'Setting Overrides', 'Advanced']);
   });
+
+  it('shows the printer pages in Orca\'s order', () => {
+    const names = ['Basic information', 'Machine G-code', 'Notes', 'Motion ability', 'Multimaterial', 'Extruder'];
+    const list = pages(names.map((n, i) => row(String(i), n)), []);
+    expect(list.map((p) => p.page)).toEqual(['Basic information', 'Machine G-code', 'Multimaterial', 'Extruder', 'Motion ability', 'Notes']);
+  });
+
+  it('keeps Notes last on the process tab', () => {
+    const list = pages(['Quality', 'Others', 'Notes'].map((n, i) => row(String(i), n)), []);
+    expect(list.map((p) => p.page)).toEqual(['Quality', 'Others', 'Notes']);
+  });
 });

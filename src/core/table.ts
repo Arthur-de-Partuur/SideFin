@@ -243,8 +243,16 @@ export function filterRows(rows: Row[], f: RowFilter): Row[] {
 
 export const OTHER_PAGE = 'Not shown in Orca';
 
-/** Orca adds the filament's Setting Overrides page after Cooling (TabFilament::add_filament_overrides_page). */
-const PAGE_AFTER: Record<string, string> = { 'Setting Overrides': 'Cooling' };
+/**
+ * Pages Orca shows in another place than its source order suggests, applied in turn:
+ * the filament's Setting Overrides page comes after Cooling (TabFilament::add_filament_overrides_page),
+ * and on the printer tab Motion ability and Notes come after Extruder (as Orca 2.5 shows them).
+ */
+const PAGE_AFTER: [page: string, after: string][] = [
+  ['Setting Overrides', 'Cooling'],
+  ['Motion ability', 'Extruder'],
+  ['Notes', 'Motion ability'],
+];
 
 export interface PageInfo {
   page: string;
@@ -277,7 +285,7 @@ export function pages(levelRows: Row[], shownRows: Row[]): PageInfo[] {
   }
   const list = [...out.values()].filter((p) => p.page !== OTHER_PAGE);
   // Pages Orca builds in a separate function and inserts elsewhere.
-  for (const [page, after] of Object.entries(PAGE_AFTER)) {
+  for (const [page, after] of PAGE_AFTER) {
     const i = list.findIndex((p) => p.page === page);
     const j = list.findIndex((p) => p.page === after);
     if (i < 0 || j < 0) continue;

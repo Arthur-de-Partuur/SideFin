@@ -2,6 +2,12 @@
 
 Goal ids refer to [docs/PURPOSE.md](docs/PURPOSE.md).
 
+## 0.5.1 (unreleased)
+
+### 0.5.1-dev.1
+
+- Printer tab: the pages now come in Orca's order (Basic information, Machine G-code, Multimaterial, Extruder, Motion ability, Notes). (G1)
+
 ## 0.5.0 (2026-11-26)
 
 Step 5: what an Orca update changes (G5, P5).
